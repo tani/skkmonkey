@@ -1,4 +1,4 @@
-# Validation — v0.2.0, 2026-10-01
+# Validation — v0.2.1, 2026-10-01
 
 - Node.js 24.19.0: TypeScript strict typecheck passed; 15 Node tests passed.
 - esbuild: standalone `dist/skk-ime.user.js` built successfully.
@@ -45,9 +45,17 @@ EditContext also checks that its buffer matches the model after synchronization.
 Monaco and both CodeMirror generations additionally check multiple-cursor
 insertion; ProseMirror additionally checks preservation of strong marks.
 
-The complete `npm run check` passed: strict typecheck, 15 engine tests, existing
+All checks in `npm run check` passed (browser executables supplied via environment): strict typecheck, 15 engine tests, existing
 DOM integration tests on both browsers, and all real component configurations.
 Tests use each editor's default keymap/history configuration, except the explicit
 read-only and multiple-selection cases. Unsupported/custom configurations and
 page execution-context requirements are documented in README.md. No actual
 userscript-manager extension session or arbitrary production website was tested.
+
+## Compact contextual UI
+
+Both browsers verify the panel stays hidden on focus while idle, mode badges
+expire automatically, pending romaji and conversion display the panel, and
+confirmation, cancellation, and blur hide it. Candidate panels stay at most
+60 px tall and 320 px wide. A 280 px viewport with a long candidate checks
+viewport clamping, two-row height, paging to candidate six and click confirmation.
