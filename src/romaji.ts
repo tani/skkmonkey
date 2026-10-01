@@ -1,8 +1,11 @@
 import { kanaTable } from './kana-table.ts';
 
 const rules = new Map(kanaTable);
-const prefixes = new Set(kanaTable.flatMap(([key]) =>
-  Array.from({ length: key.length - 1 }, (_, i) => key.slice(0, i + 1))));
+const prefixes = new Set(
+  kanaTable.flatMap(([key]) =>
+    Array.from({ length: key.length - 1 }, (_, i) => key.slice(0, i + 1)),
+  ),
+);
 
 export class Romaji {
   pending = '';
@@ -37,9 +40,11 @@ export class Romaji {
 }
 
 export function katakana(text: string): string {
-  return text.replace(/[ぁ-ゖ]/g, c => String.fromCharCode(c.charCodeAt(0) + 0x60));
+  return text.replace(/[ぁ-ゖ]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 0x60));
 }
 
 export function fullwidth(text: string): string {
-  return text.replace(/[!-~ ]/g, c => c === ' ' ? '　' : String.fromCharCode(c.charCodeAt(0) + 0xfee0));
+  return text.replace(/[!-~ ]/g, (c) =>
+    c === ' ' ? '　' : String.fromCharCode(c.charCodeAt(0) + 0xfee0),
+  );
 }

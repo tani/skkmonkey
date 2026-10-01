@@ -12,5 +12,6 @@ export const adapter: EditorAdapter = {
     const surface = root.matches('.ql-editor') ? root : root.querySelector('.ql-editor');
     return (surface?.textContent ?? '') + '\u0000';
   },
-  insert: (element, text) => legacyInstance(element) ? insertLegacy(element, text) : insertModern(element, text),
+  insert: (element, text) =>
+    legacyInstance(element) ? insertLegacy(element, text) : insertModern(element, text),
 };

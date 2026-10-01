@@ -8,7 +8,14 @@ import { adapter as quill } from './quill/index.ts';
 
 // Specific wrappers precede their generic underlying editor. Selection is by
 // input capabilities/DOM, never an assumed globally accessible version string.
-export const adapters: readonly EditorAdapter[] = [monaco, codemirror5, codemirror6, tiptap, prosemirror, quill];
+export const adapters: readonly EditorAdapter[] = [
+  monaco,
+  codemirror5,
+  codemirror6,
+  tiptap,
+  prosemirror,
+  quill,
+];
 export function componentFor(element: HTMLElement): Component | null {
   for (const adapter of adapters) {
     const root = adapter.detect(element);

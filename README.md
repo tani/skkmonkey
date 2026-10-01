@@ -25,21 +25,21 @@ if desired. It requires page execution context; keep `@sandbox raw` and
 
 ## Basic keys
 
-| Key | Action |
-| --- | --- |
-| Ctrl+J | Enter hiragana mode; confirm pending input |
-| Ctrl+Shift+Space | Toggle ASCII / hiragana |
-| Lowercase romaji | Type kana directly |
-| Uppercase initial or `;` | Start conversion reading: `Kanji` → `▽かんじ` |
-| Uppercase inside reading | Start okuri: `KaKu` → `書く` |
-| Space | Convert / next candidate |
-| `x` during conversion | Previous candidate |
-| Enter | Confirm |
-| Ctrl+G / Escape | Return from candidates to reading, then cancel reading |
-| Backspace / Ctrl+H | Delete pending input |
-| `q` | Switch hiragana / katakana |
-| `l` / `L` | ASCII / fullwidth ASCII; Ctrl+J returns to hiragana |
-| `/` | Abbreviation mode: `/skk` + Space → `SKK` |
+| Key                      | Action                                                 |
+| ------------------------ | ------------------------------------------------------ |
+| Ctrl+J                   | Enter hiragana mode; confirm pending input             |
+| Ctrl+Shift+Space         | Toggle ASCII / hiragana                                |
+| Lowercase romaji         | Type kana directly                                     |
+| Uppercase initial or `;` | Start conversion reading: `Kanji` → `▽かんじ`          |
+| Uppercase inside reading | Start okuri: `KaKu` → `書く`                           |
+| Space                    | Convert / next candidate                               |
+| `x` during conversion    | Previous candidate                                     |
+| Enter                    | Confirm                                                |
+| Ctrl+G / Escape          | Return from candidates to reading, then cancel reading |
+| Backspace / Ctrl+H       | Delete pending input                                   |
+| `q`                      | Switch hiragana / katakana                             |
+| `l` / `L`                | ASCII / fullwidth ASCII; Ctrl+J returns to hiragana    |
+| `/`                      | Abbreviation mode: `/skk` + Space → `SKK`              |
 
 Uppercase letters inside an unfinished romaji syllable continue that syllable.
 Once the reading has completed kana, uppercase at a syllable boundary starts
@@ -90,14 +90,14 @@ excluded. Add `data-skk-disable` to an element or ancestor to opt out.
 Real component fixtures run the same scenarios on independently installed,
 lockfile-pinned dependency profiles in Chromium and Firefox:
 
-| Editor | Legacy profile | Current profile |
-| --- | --- | --- |
-| Monaco | 0.44.0 | 0.57.0 |
-| CodeMirror 5 | 5.58.3 | 5.65.21 |
-| CodeMirror 6 | 6.28.6 | 6.43.13 |
-| ProseMirror | 1.33.8 | 1.42.6 |
-| Tiptap | 2.11.5 | 3.31.4 |
-| Quill | 1.3.7 | 2.0.3 |
+| Editor       | Legacy profile | Current profile |
+| ------------ | -------------- | --------------- |
+| Monaco       | 0.44.0         | 0.57.0          |
+| CodeMirror 5 | 5.58.3         | 5.65.21         |
+| CodeMirror 6 | 6.28.6         | 6.43.13         |
+| ProseMirror  | 1.33.8         | 1.42.6          |
+| Tiptap       | 2.11.5         | 3.31.4          |
+| Quill        | 1.3.7          | 2.0.3           |
 
 `current` is a fixed tested baseline, not an automatically moving latest version.
 Profile manifests include the full dependency set for modular editors. Both
@@ -119,7 +119,8 @@ for the test matrix.
 
 ## Development
 
-Requires Node.js **22.18+** and npm.
+Uses **Vite+ 1.0.0** for development, builds, tests, linting, formatting, and type checks.
+Requires Node.js **22.18+ (22.x), 24.11+ (24.x), or 26+**, and npm.
 
 ```sh
 npm ci
@@ -127,7 +128,18 @@ npx playwright install chromium firefox
 npm run check
 ```
 
-`npm run check` runs type checking, engine tests, the userscript build, and
+```sh
+npm run dev       # Vite development page with HMR
+npx vp check      # Oxfmt + Oxlint + TypeScript checks
+npx vp test run   # Vitest unit tests
+npx vp build      # Standalone userscript with metadata header
+npm run fmt      # Format maintained source and configuration
+```
+
+Configuration is centralized in `vite.config.ts`. Both the userscript and
+editor fixtures use Vite+ / Rolldown; Playwright drives Chromium and Firefox.
+The npm lockfile pins Vite+ and its bundled tools; no global Vite+ install is needed.
+`npm run check` runs formatting, linting, type checking, engine tests, the userscript build, and
 browser/editor integration tests. Use `npm run build` to regenerate
 `dist/skk-ime.user.js`. Editor libraries are test dependencies only.
 

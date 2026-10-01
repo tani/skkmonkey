@@ -1,4 +1,1 @@
-[
-  "profiles/legacy/profile.json",
-  "profiles/current/profile.json"
-]
+["profiles/legacy/profile.json", "profiles/current/profile.json"]

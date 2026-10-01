@@ -1,21 +1,21 @@
 {
   "name": "skk-userscript",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
-  "type": "module",
   "description": "Local SKK Japanese input for Firefox and Chrome userscript managers",
   "license": "MIT",
-  "engines": {
-    "node": ">=22.18"
-  },
+  "type": "module",
   "scripts": {
-    "build": "node scripts/build.mjs",
-    "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test test/*.test.ts",
+    "build": "vp build",
+    "typecheck": "vp check --no-fmt --no-lint",
+    "test": "vp test run",
     "test:browser": "node scripts/browser-test.mjs",
     "test:editors": "node scripts/editor-test.mjs",
-    "check": "npm run typecheck && npm test && npm run build && npm run test:browser && npm run test:editors",
-    "test:editors:matrix": "node scripts/editor-matrix.mjs"
+    "check": "vp check && vp test run && vp build && vp run test:browser && vp run test:editors",
+    "test:editors:matrix": "node scripts/editor-matrix.mjs",
+    "dev": "vp dev",
+    "lint": "vp check --no-fmt",
+    "fmt": "vp fmt"
   },
   "devDependencies": {
     "@codemirror/commands": "^6.11.1",
@@ -26,7 +26,6 @@
     "@types/codemirror": "^5.60.18",
     "@types/node": "^24.0.0",
     "codemirror5": "npm:codemirror@^5.65.21",
-    "esbuild": "^0.25.0",
     "monaco-editor": "^0.57.0",
     "playwright": "1.62.1",
     "prosemirror-commands": "^1.7.2",
@@ -36,6 +35,13 @@
     "prosemirror-state": "^1.4.4",
     "prosemirror-view": "^1.42.6",
     "quill": "^2.0.3",
-    "typescript": "^5.9.0"
+    "vite-plus": "1.0.0"
+  },
+  "overrides": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@1.0.0",
+    "vitest": "5.0.1"
+  },
+  "engines": {
+    "node": "^22.18.0 || ^24.11.0 || >=26.0.0"
   }
 }

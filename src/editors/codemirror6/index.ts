@@ -13,5 +13,6 @@ export const adapter: EditorAdapter = {
     const surface = root.matches('.cm-content') ? root : root.querySelector('.cm-content');
     return (surface?.textContent ?? '') + '\u0000';
   },
-  insert: (element, text) => nativeContext(element) ? insertEditContext(element, text) : insertContent(element, text),
+  insert: (element, text) =>
+    nativeContext(element) ? insertEditContext(element, text) : insertContent(element, text),
 };

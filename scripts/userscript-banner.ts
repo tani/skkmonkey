@@ -1,9 +1,7 @@
-import { build } from 'esbuild';
-import { mkdir, readFile } from 'node:fs/promises';
-
+import { readFile } from 'node:fs/promises';
 const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
 const upstreamLicense = await readFile(new URL('../LICENSE.skkeleton', import.meta.url), 'utf8');
-const banner = `// ==UserScript==
+export const banner = `// ==UserScript==
 // @name         SKK Browser IME
 // @namespace    cc.tani.skk-userscript
 // @version      ${pkg.version}
@@ -24,12 +22,3 @@ const banner = `// ==UserScript==
 Kana rules derived from vim-skk/skkeleton (altered browser version).
 ${upstreamLicense}
 */`;
-await mkdir(new URL('../dist/', import.meta.url), { recursive: true });
-await build({
-  entryPoints: [new URL('../src/userscript.ts', import.meta.url).pathname],
-  outfile: new URL('../dist/skk-ime.user.js', import.meta.url).pathname,
-  bundle: true, format: 'iife', platform: 'browser', target: ['chrome110', 'firefox115'],
-  banner: { js: banner }, legalComments: 'inline', charset: 'utf8',
-  sourcemap: false, minify: false,
-});
-console.log('Built dist/skk-ime.user.js (standalone; no runtime dependencies)');

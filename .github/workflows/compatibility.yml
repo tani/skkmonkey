@@ -16,9 +16,9 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci
-      - run: npm run typecheck && npm test && npm run build
+      - run: npx vp check && npx vp test run && npx vp build
       - run: npx playwright install --with-deps chromium firefox
-      - run: npm run test:browser
+      - run: npx vp run test:browser
   editors:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -50,9 +50,9 @@ jobs:
             package-lock.json
             test/editors/**/package-lock.json
       - run: npm ci
-      - run: npm run build
+      - run: npx vp build
       - run: npx playwright install --with-deps ${{ matrix.browser }}
-      - run: npm run test:editors:matrix -- --install ${{ matrix.profile }}
+      - run: npx vp run test:editors:matrix -- --install ${{ matrix.profile }}
         env:
           SKK_TEST_BROWSERS: ${{ matrix.browser }}
       - uses: actions/upload-artifact@v4

@@ -4,7 +4,6 @@ import { insert as insertContent } from './contenteditable.ts';
 export const adapter: EditorAdapter = {
   kind: 'prosemirror',
   detect(element) {
-
     return element.closest('.ProseMirror');
   },
   snapshot(root) {

@@ -1,4 +1,4 @@
-# Validation — v0.3.0, 2026-10-01
+# Validation — v0.3.1, 2026-10-01
 
 Strict TypeScript typecheck and all 21 engine/resource unit tests passed.
 The standalone userscript bundle was rebuilt. Ordinary input/contenteditable,
@@ -13,20 +13,20 @@ passed the common scenarios on both browsers (24 editor/profile/browser combinat
 Each profile has its own manifest and lockfile; direct fixture imports are
 resolved into its own dependency tree. The combined baseline suite is retained.
 
-| Profile | Direct dependency pins | Chromium | Firefox |
-| --- | --- | --- | --- |
-| codemirror5/legacy | codemirror5 5.58.3 | Passed | Passed |
-| codemirror5/current | codemirror5 5.65.21 | Passed | Passed |
-| codemirror6/legacy | @codemirror/view 6.28.6 , @codemirror/state 6.4.1 , @codemirror/commands 6.6.0 | Passed | Passed |
-| codemirror6/current | @codemirror/view 6.43.13 , @codemirror/state 6.7.6 , @codemirror/commands 6.11.1 | Passed | Passed |
-| monaco/legacy | monaco-editor 0.44.0 | Passed | Passed |
-| monaco/current | monaco-editor 0.57.0 | Passed | Passed |
-| prosemirror/legacy | prosemirror-state 1.4.3 , prosemirror-view 1.33.8 , prosemirror-model 1.22.3 , prosemirror-schema-basic 1.2.3 , prosemirror-history 1.4.1 , prosemirror-commands 1.6.0 , prosemirror-keymap 1.2.2 | Passed | Passed |
-| prosemirror/current | prosemirror-state 1.4.4 , prosemirror-view 1.42.6 , prosemirror-model 1.25.12 , prosemirror-schema-basic 1.2.5 , prosemirror-history 1.5.1 , prosemirror-commands 1.7.2 , prosemirror-keymap 1.2.3 | Passed | Passed |
-| quill/legacy | quill 1.3.7 | Passed | Passed |
-| quill/current | quill 2.0.3 | Passed | Passed |
-| tiptap/legacy | @tiptap/core 2.11.5 , @tiptap/starter-kit 2.11.5 , @tiptap/pm 2.11.5 , prosemirror-state 1.4.3 | Passed | Passed |
-| tiptap/current | @tiptap/core 3.31.4 , @tiptap/starter-kit 3.31.4 , prosemirror-state 1.4.4 | Passed | Passed |
+| Profile             | Direct dependency pins                                                                                                                                                                             | Chromium | Firefox |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------- |
+| codemirror5/legacy  | codemirror5 5.58.3                                                                                                                                                                                 | Passed   | Passed  |
+| codemirror5/current | codemirror5 5.65.21                                                                                                                                                                                | Passed   | Passed  |
+| codemirror6/legacy  | @codemirror/view 6.28.6 , @codemirror/state 6.4.1 , @codemirror/commands 6.6.0                                                                                                                     | Passed   | Passed  |
+| codemirror6/current | @codemirror/view 6.43.13 , @codemirror/state 6.7.6 , @codemirror/commands 6.11.1                                                                                                                   | Passed   | Passed  |
+| monaco/legacy       | monaco-editor 0.44.0                                                                                                                                                                               | Passed   | Passed  |
+| monaco/current      | monaco-editor 0.57.0                                                                                                                                                                               | Passed   | Passed  |
+| prosemirror/legacy  | prosemirror-state 1.4.3 , prosemirror-view 1.33.8 , prosemirror-model 1.22.3 , prosemirror-schema-basic 1.2.3 , prosemirror-history 1.4.1 , prosemirror-commands 1.6.0 , prosemirror-keymap 1.2.2  | Passed   | Passed  |
+| prosemirror/current | prosemirror-state 1.4.4 , prosemirror-view 1.42.6 , prosemirror-model 1.25.12 , prosemirror-schema-basic 1.2.5 , prosemirror-history 1.5.1 , prosemirror-commands 1.7.2 , prosemirror-keymap 1.2.3 | Passed   | Passed  |
+| quill/legacy        | quill 1.3.7                                                                                                                                                                                        | Passed   | Passed  |
+| quill/current       | quill 2.0.3                                                                                                                                                                                        | Passed   | Passed  |
+| tiptap/legacy       | @tiptap/core 2.11.5 , @tiptap/starter-kit 2.11.5 , @tiptap/pm 2.11.5 , prosemirror-state 1.4.3                                                                                                     | Passed   | Passed  |
+| tiptap/current      | @tiptap/core 3.31.4 , @tiptap/starter-kit 3.31.4 , prosemirror-state 1.4.4                                                                                                                         | Passed   | Passed  |
 
 Every profile checks direct kana, ASCII/kana mode transitions, candidate
 navigation, automatic okuri, selected-text replacement, undo/redo, cancellation,
@@ -63,3 +63,17 @@ works. Tests use local userscript-manager API shims. Live Tampermonkey/Violentmo
 extension installations and manager-controlled resource downloads were not tested.
 Browser executables were supplied through environment variables; Firefox sandbox
 flags were adjusted for this container only. No such flags or binaries are shipped.
+
+## Vite+ toolchain
+
+Vite+ 1.0.0 provides Vite / Rolldown builds for the userscript and isolated
+editor fixtures, Vitest for the 21 unit tests, Oxlint for lint and type checking,
+and Oxfmt for maintained sources. `vite.config.ts` holds the shared toolchain
+configuration; the generated kana table and dependency profiles are excluded
+from formatting. Playwright remains the browser automation layer.
+The dev page (`npm run dev`) uses the bundled starter dictionary.
+
+A clean root `npm ci` succeeded with the locked Vite+ toolchain. `vp check`
+passed without format, lint, or type errors or warnings. The Vite dev page
+loaded its modules and converted `kana` to `かな` in Chromium. Monaco fixtures
+use Vite-built editor workers for both versions.

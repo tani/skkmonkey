@@ -16,7 +16,8 @@ export class UI {
   private statusTimer?: ReturnType<typeof setTimeout>;
   private refresh = (): void => {};
   constructor(onToggle: () => void) {
-    this.host.style.cssText = 'all:initial;font:14px/1.5 system-ui,sans-serif;color:#182331;color-scheme:light;position:fixed;inset:0;pointer-events:none;z-index:2147483647';
+    this.host.style.cssText =
+      'all:initial;font:14px/1.5 system-ui,sans-serif;color:#182331;color-scheme:light;position:fixed;inset:0;pointer-events:none;z-index:2147483647';
     this.root = this.host.attachShadow({ mode: 'closed' });
     const style = document.createElement('style');
     style.textContent = `
@@ -39,16 +40,26 @@ export class UI {
       .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}[hidden]{display:none!important}
     `;
     this.root.append(style);
-    this.panel = document.createElement('div'); this.panel.className = 'panel'; this.panel.hidden = true;
-    this.panel.addEventListener('pointerdown', e => e.preventDefault());
-    this.panel.addEventListener('click', e => { if ((e.target as HTMLElement).closest('[data-toggle]')) onToggle(); });
-    this.settings = document.createElement('div'); this.settings.className = 'backdrop'; this.settings.hidden = true;
-    this.root.append(this.panel, this.settings); document.documentElement.append(this.host);
+    this.panel = document.createElement('div');
+    this.panel.className = 'panel';
+    this.panel.hidden = true;
+    this.panel.addEventListener('pointerdown', (e) => e.preventDefault());
+    this.panel.addEventListener('click', (e) => {
+      if ((e.target as HTMLElement).closest('[data-toggle]')) onToggle();
+    });
+    this.settings = document.createElement('div');
+    this.settings.className = 'backdrop';
+    this.settings.hidden = true;
+    this.root.append(this.panel, this.settings);
+    document.documentElement.append(this.host);
   }
   message(text: string): void {
     this.status = text;
     clearTimeout(this.statusTimer);
-    this.statusTimer = setTimeout(() => { this.status = ''; this.refresh(); }, 3500);
+    this.statusTimer = setTimeout(() => {
+      this.status = '';
+      this.refresh();
+    }, 3500);
   }
   render(engine: Engine, editor: Editor | null, choose: (index: number) => void): void {
     this.refresh = () => this.render(engine, editor, choose);
@@ -56,50 +67,89 @@ export class UI {
       this.lastMode = engine.mode;
       this.modeNotice = true;
       clearTimeout(this.modeTimer);
-      this.modeTimer = setTimeout(() => { this.modeNotice = false; this.refresh(); }, 800);
+      this.modeTimer = setTimeout(() => {
+        this.modeNotice = false;
+        this.refresh();
+      }, 800);
     }
-    this.panel.hidden = !editor || !this.settings.hidden || !(engine.active || this.modeNotice || this.status);
+    this.panel.hidden =
+      !editor || !this.settings.hidden || !(engine.active || this.modeNotice || this.status);
     if (!editor || this.panel.hidden) return;
     this.panel.replaceChildren();
-    const head = document.createElement('div'); head.className = 'head';
-    const badge = document.createElement('button'); badge.dataset.toggle = '';
-    badge.textContent = 'SKK ' + labels[engine.mode]; badge.title = 'Toggle SKK: Ctrl+Shift+Space';
-    const preedit = document.createElement('span'); preedit.className = 'preedit'; preedit.textContent = engine.preedit; preedit.title = engine.preedit;
+    const head = document.createElement('div');
+    head.className = 'head';
+    const badge = document.createElement('button');
+    badge.dataset.toggle = '';
+    badge.textContent = 'SKK ' + labels[engine.mode];
+    badge.title = 'Toggle SKK: Ctrl+Shift+Space';
+    const preedit = document.createElement('span');
+    preedit.className = 'preedit';
+    preedit.textContent = engine.preedit;
+    preedit.title = engine.preedit;
     preedit.setAttribute('aria-live', 'polite');
-    head.append(badge, preedit); this.panel.append(head);
+    head.append(badge, preedit);
+    this.panel.append(head);
     if (engine.phase === 'candidate') {
-      const candidates = document.createElement('div'); candidates.className = 'candidates';
+      const candidates = document.createElement('div');
+      candidates.className = 'candidates';
       const start = Math.floor(engine.index / 5) * 5;
       engine.candidates.slice(start, start + 5).forEach((candidate, offset) => {
         const button = document.createElement('button');
         button.textContent = `${start + offset + 1}. ${candidate.text}${engine.display(engine.okuri)}`;
-        button.title = `${candidate.text}${engine.display(engine.okuri)}${candidate.annotation ? ' — ' + candidate.annotation : ''}`; button.classList.toggle('selected', start + offset === engine.index);
+        button.title = `${candidate.text}${engine.display(engine.okuri)}${candidate.annotation ? ' — ' + candidate.annotation : ''}`;
+        button.classList.toggle('selected', start + offset === engine.index);
         button.setAttribute('aria-pressed', String(start + offset === engine.index));
-        button.addEventListener('click', () => choose(start + offset)); candidates.append(button);
+        button.addEventListener('click', () => choose(start + offset));
+        candidates.append(button);
       });
       this.panel.append(candidates);
       const selected = candidates.querySelector<HTMLElement>('.selected');
-      if (selected) candidates.scrollLeft = Math.max(0, selected.offsetLeft - candidates.offsetLeft - (candidates.clientWidth - selected.offsetWidth) / 2);
+      if (selected)
+        candidates.scrollLeft = Math.max(
+          0,
+          selected.offsetLeft -
+            candidates.offsetLeft -
+            (candidates.clientWidth - selected.offsetWidth) / 2,
+        );
     }
     if (this.status && !engine.active) {
       // Notices share the preedit row so candidates never create a third row.
-      const note = document.createElement('span'); note.className = 'status';
-      note.textContent = this.status; note.title = this.status; note.setAttribute('role', 'status');
+      const note = document.createElement('span');
+      note.className = 'status';
+      note.textContent = this.status;
+      note.title = this.status;
+      note.setAttribute('role', 'status');
       preedit.replaceWith(note);
     }
     const rect = (componentFor(editor)?.root ?? editor).getBoundingClientRect();
     // Anchor at the field edge; a caret mirror would mismeasure rich editors.
-    this.panel.style.left = Math.max(8, Math.min(rect.left, innerWidth - this.panel.offsetWidth - 8)) + 'px';
+    this.panel.style.left =
+      Math.max(8, Math.min(rect.left, innerWidth - this.panel.offsetWidth - 8)) + 'px';
     const height = this.panel.offsetHeight;
     const bottom = rect.bottom + 5;
-    this.panel.style.top = Math.max(8, bottom + height < innerHeight ? bottom : Math.min(rect.top - height - 5, innerHeight - height - 8)) + 'px';
+    this.panel.style.top =
+      Math.max(
+        8,
+        bottom + height < innerHeight
+          ? bottom
+          : Math.min(rect.top - height - 5, innerHeight - height - 8),
+      ) + 'px';
   }
   dialog(title: string): HTMLDivElement {
-    this.settings.replaceChildren(); this.settings.hidden = false; this.panel.hidden = true;
-    const dialog = document.createElement('div'); dialog.className = 'dialog';
-    dialog.setAttribute('role', 'dialog'); dialog.setAttribute('aria-modal', 'true');
-    const heading = document.createElement('h2'); heading.textContent = title; dialog.append(heading);
-    this.settings.append(dialog); return dialog;
+    this.settings.replaceChildren();
+    this.settings.hidden = false;
+    this.panel.hidden = true;
+    const dialog = document.createElement('div');
+    dialog.className = 'dialog';
+    dialog.setAttribute('role', 'dialog');
+    dialog.setAttribute('aria-modal', 'true');
+    const heading = document.createElement('h2');
+    heading.textContent = title;
+    dialog.append(heading);
+    this.settings.append(dialog);
+    return dialog;
   }
-  close(): void { this.settings.hidden = true; }
+  close(): void {
+    this.settings.hidden = true;
+  }
 }
