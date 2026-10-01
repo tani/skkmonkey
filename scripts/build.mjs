@@ -13,6 +13,8 @@ const banner = `// ==UserScript==
 // @run-at       document-end
 // @sandbox      raw
 // @inject-into  page
+// @resource     SKK_JISYO_L https://raw.githubusercontent.com/skk-dev/dict/master/SKK-JISYO.L
+// @grant        GM_getResourceURL
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_registerMenuCommand

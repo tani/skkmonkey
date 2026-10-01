@@ -40,6 +40,7 @@ try {
         window.GM_getValue = (key, fallback) => store.get(key) ?? fallback;
         window.GM_setValue = (key, value) => { store.set(key, value); };
         window.GM_registerMenuCommand = () => {};
+        window.GM_getResourceURL = () => 'data:text/plain;base64,pLikt6TnIC+8rb3xLwo=';
         const attach = Element.prototype.attachShadow;
         Element.prototype.attachShadow = function(options) {
           const root = attach.call(this, { ...options, mode: 'open' });

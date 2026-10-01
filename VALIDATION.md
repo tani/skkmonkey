@@ -1,6 +1,6 @@
-# Validation — v0.2.1, 2026-10-01
+# Validation — v0.2.2, 2026-10-01
 
-- Node.js 24.19.0: TypeScript strict typecheck passed; 15 Node tests passed.
+- Node.js 24.19.0: TypeScript strict typecheck passed; 19 Node tests passed.
 - esbuild: standalone `dist/skk-ime.user.js` built successfully.
 - Playwright 1.62.1: the actual bundle passed integration checks in Firefox 153
   and Chromium 153 using a local fixture and userscript-manager API shims.
@@ -45,7 +45,7 @@ EditContext also checks that its buffer matches the model after synchronization.
 Monaco and both CodeMirror generations additionally check multiple-cursor
 insertion; ProseMirror additionally checks preservation of strong marks.
 
-All checks in `npm run check` passed (browser executables supplied via environment): strict typecheck, 15 engine tests, existing
+All checks in `npm run check` passed (browser executables supplied via environment): strict typecheck, 19 engine/resource tests, existing
 DOM integration tests on both browsers, and all real component configurations.
 Tests use each editor's default keymap/history configuration, except the explicit
 read-only and multiple-selection cases. Unsupported/custom configurations and
@@ -59,3 +59,20 @@ expire automatically, pending romaji and conversion display the panel, and
 confirmation, cancellation, and blur hide it. Candidate panels stay at most
 60 px tall and 320 px wide. A 280 px viewport with a long candidate checks
 viewport clamping, two-row height, paging to candidate six and click confirmation.
+
+## SKK-JISYO.L resource
+
+The metadata declares skk-dev/dict/master/SKK-JISYO.L as `@resource` and grants
+`GM_getResourceURL`. Resource tests cover EUC-JP decoding, data URLs without
+fetch, blob URLs, async API results, invalid/missing/empty resource fallback,
+and imported/resource/personal candidate priority. Browser tests exercise data
+and blob resource API shims, import priority, persistence and fallback.
+
+The actual 4,489,815-byte upstream EUC-JP dictionary was also supplied through
+the resource API shim on both Chromium and Firefox: 175,787 combined headings
+loaded and `Nihon` converted to `日本`. All component integration tests passed
+with a cached-resource shim. Extension-managed downloads themselves were not
+tested in a live Tampermonkey/Violentmonkey session.
+
+To repeat the optional full-dictionary integration check, provide an EUC-JP copy
+with `SKK_TEST_DICTIONARY_PATH=/path/to/SKK-JISYO.L npm run test:browser`.

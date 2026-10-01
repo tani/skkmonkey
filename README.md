@@ -51,12 +51,18 @@ Moving the caret or leaving the field commits pending input.
 
 ## Dictionaries
 
-A small starter dictionary is included. For everyday use, download
-`SKK-JISYO.L` from [skk-dev/dict](https://github.com/skk-dev/dict) and import it
-through the manager menu **SKK: 辞書設定 / Dictionary settings**.
+[skk-dev/dict](https://github.com/skk-dev/dict)'s `SKK-JISYO.L` is declared as
+`@resource`. Your userscript manager downloads and caches it during installation
+or script updates. The script reads the cached bytes with `GM_getResourceURL`
+and decodes EUC-JP locally; no dictionary request is made while typing.
+If the resource cannot be read, the included small starter dictionary is used.
+
+You can also import additional dictionaries through the manager menu
+**SKK: 辞書設定 / Dictionary settings**. Imported candidates take priority over
+SKK-JISYO.L; personal registrations and learned candidates take priority over both.
 
 - UTF-8 and EUC-JP files are supported, up to 32 MiB. Import replaces the previous
-  imported dictionary; the starter dictionary remains.
+  imported dictionary; SKK-JISYO.L and the starter fallback remain available.
 - Unknown words or Space past the last candidate open registration. Enter the
   kanji stem with your OS IME or paste; okuri is appended automatically.
 - Confirmed candidates are learned. Personal entries can be exported as SKK text.
@@ -64,8 +70,10 @@ through the manager menu **SKK: 辞書設定 / Dictionary settings**.
   to pick up changes; simultaneous registration across tabs is not synchronized.
 - Dictionary Lisp expressions and okuri-specific candidate blocks are skipped.
 
-The full dictionary is not bundled or downloaded automatically. Respect its
-license when obtaining or redistributing it.
+The full dictionary is downloaded by the manager, not embedded in the bundle.
+SKK-JISYO.L is licensed under GPL-2.0-or-later; its copyright and license notices
+remain in the cached upstream resource. Script updates refresh it according to
+your manager’s resource update settings.
 
 ## Supported editors
 
@@ -112,9 +120,12 @@ browser/editor integration tests. Use `npm run build` to regenerate
 
 The conversion engine lives in `src/engine.ts`, editor adapters in
 `src/editor.ts` and `src/component.ts`, and browser integration in
-`src/userscript.ts`.
+`src/userscript.ts`; cached dictionary loading lives in `src/resource.ts`.
 
 ## License
 
 [MIT](LICENSE) for the implementation and starter dictionary.
 Derived skkeleton kana/okuri tables retain their [zlib license](LICENSE.skkeleton).
+
+The separately downloaded SKK-JISYO.L resource retains its upstream
+GPL-2.0-or-later license and notices.

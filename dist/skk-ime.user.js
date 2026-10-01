@@ -1,13 +1,15 @@
 // ==UserScript==
 // @name         SKK Browser IME
 // @namespace    cc.tani.skk-userscript
-// @version      0.2.1
+// @version      0.2.2
 // @description  Local SKK Japanese input; TypeScript, skkeleton kana rules, local dictionaries
 // @match        https://*/*
 // @match        http://*/*
 // @run-at       document-end
 // @sandbox      raw
 // @inject-into  page
+// @resource     SKK_JISYO_L https://raw.githubusercontent.com/skk-dev/dict/master/SKK-JISYO.L
+// @grant        GM_getResourceURL
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_registerMenuCommand
@@ -2547,12 +2549,55 @@ ime /IME;Input Method Editor/
     }
   };
 
+  // src/resource.ts
+  async function loadResourceDictionary(getResourceURL = (name, isBlobUrl) => GM_getResourceURL(name, isBlobUrl)) {
+    try {
+      const url = await getResourceURL("SKK_JISYO_L", false);
+      let bytes;
+      const data = /^data:[^,]*;base64,(.*)$/s.exec(url);
+      if (data) {
+        const binary = atob(data[1]);
+        bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+      } else {
+        if (!url.startsWith("blob:") && !url.startsWith("data:")) throw new Error("Missing cached dictionary resource");
+        const response = await fetch(url, { signal: AbortSignal.timeout(5e3) });
+        if (!response.ok) throw new Error("Cannot read cached dictionary resource");
+        bytes = new Uint8Array(await response.arrayBuffer());
+      }
+      const dictionary = new Dictionary(new TextDecoder("euc-jp", { fatal: true }).decode(bytes));
+      if (!dictionary.base.size) throw new Error("Empty dictionary resource");
+      return dictionary;
+    } catch (error) {
+      console.warn("SKK-JISYO.L resource unavailable; using starter dictionary:", error);
+      return null;
+    }
+  }
+  function mergeDictionaries(...dictionaries) {
+    const base = /* @__PURE__ */ new Map();
+    for (const dictionary of dictionaries) {
+      for (const [key, candidates] of dictionary.base) {
+        const previous = base.get(key) ?? [];
+        base.set(key, [...previous, ...candidates.filter((candidate) => !previous.some((item) => item.text === candidate.text))]);
+      }
+    }
+    return base;
+  }
+
   // src/userscript.ts
   var SOURCE_KEY = "skk.dictionary.v1";
   var USER_KEY = "skk.user.v1";
   async function main() {
-    const [source, user] = await Promise.all([GM_getValue(SOURCE_KEY, ""), GM_getValue(USER_KEY, {})]);
-    const dictionary = new Dictionary(starterDictionary + "\n" + (typeof source === "string" ? source : ""), user);
+    const [source, user, resource] = await Promise.all([
+      GM_getValue(SOURCE_KEY, ""),
+      GM_getValue(USER_KEY, {}),
+      loadResourceDictionary()
+    ]);
+    const starter = new Dictionary(starterDictionary);
+    const defaults = resource ? mergeDictionaries(resource, starter) : starter.base;
+    const defaultDictionary = new Dictionary();
+    defaultDictionary.base = defaults;
+    const dictionary = new Dictionary("", user);
+    dictionary.base = mergeDictionaries(new Dictionary(typeof source === "string" ? source : ""), defaultDictionary);
     const engine = new Engine(dictionary);
     let editor = null;
     let bookmark = null;
@@ -2719,7 +2764,7 @@ ime /IME;Input Method Editor/
       const original = editor;
       const dialog = ui.dialog("SKK 辞書設定");
       const text = document.createElement("p");
-      text.textContent = `現在 ${dictionary.base.size.toLocaleString()} 見出し、登録・学習 ${Object.keys(dictionary.user).length.toLocaleString()} 見出し。SKK-JISYO.L 等の辞書をローカルから読み込めます。入力内容の送信は行いません。`;
+      text.textContent = `現在 ${dictionary.base.size.toLocaleString()} 見出し、登録・学習 ${Object.keys(dictionary.user).length.toLocaleString()} 見出し。${resource ? "SKK-JISYO.L を使用中。" : "SKK-JISYO.L を読み込めなかったため内蔵小辞書を使用中。"}追加辞書をローカルから読み込めます。入力内容の送信は行いません。`;
       const encoding = document.createElement("select");
       for (const [value, label] of [["auto", "自動判定 (UTF-8 → EUC-JP)"], ["utf-8", "UTF-8"], ["euc-jp", "EUC-JP"]]) {
         const option = document.createElement("option");
@@ -2755,7 +2800,7 @@ ime /IME;Input Method Editor/
             const imported = new Dictionary(source2);
             if (!imported.base.size) throw new Error("SKK 形式の見出しが見つかりません。");
             await GM_setValue(SOURCE_KEY, source2);
-            dictionary.base = new Dictionary(starterDictionary + "\n" + source2).base;
+            dictionary.base = mergeDictionaries(imported, defaultDictionary);
             message.textContent = `${file.name}: ${imported.base.size.toLocaleString()} 見出しを保存しました。以前の取込辞書を置換しました。`;
           } catch (error) {
             message.textContent = `読込失敗: ${error instanceof Error ? error.message : String(error)}`;

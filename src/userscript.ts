@@ -3,14 +3,21 @@ import { Engine } from './engine.ts';
 import { Bookmark, findEditor, type Editor } from './editor.ts';
 import { starterDictionary } from './starter-dictionary.ts';
 import { UI } from './ui.ts';
+import { loadResourceDictionary, mergeDictionaries } from './resource.ts';
 import { componentFor, nativeContext } from './component.ts';
 
 const SOURCE_KEY = 'skk.dictionary.v1';
 const USER_KEY = 'skk.user.v1';
 
 async function main(): Promise<void> {
-  const [source, user] = await Promise.all([GM_getValue<unknown>(SOURCE_KEY, ''), GM_getValue<unknown>(USER_KEY, {})]);
-  const dictionary = new Dictionary(starterDictionary + '\n' + (typeof source === 'string' ? source : ''), user);
+  const [source, user, resource] = await Promise.all([
+    GM_getValue<unknown>(SOURCE_KEY, ''), GM_getValue<unknown>(USER_KEY, {}), loadResourceDictionary(),
+  ]);
+  const starter = new Dictionary(starterDictionary);
+  const defaults = resource ? mergeDictionaries(resource, starter) : starter.base;
+  const defaultDictionary = new Dictionary(); defaultDictionary.base = defaults;
+  const dictionary = new Dictionary('', user);
+  dictionary.base = mergeDictionaries(new Dictionary(typeof source === 'string' ? source : ''), defaultDictionary);
   const engine = new Engine(dictionary);
   let editor: Editor | null = null;
   let bookmark: Bookmark | null = null;
@@ -133,7 +140,7 @@ async function main(): Promise<void> {
     const original = editor;
     const dialog = ui.dialog('SKK 辞書設定');
     const text = document.createElement('p'); text.textContent =
-      `現在 ${dictionary.base.size.toLocaleString()} 見出し、登録・学習 ${Object.keys(dictionary.user).length.toLocaleString()} 見出し。SKK-JISYO.L 等の辞書をローカルから読み込めます。入力内容の送信は行いません。`;
+      `現在 ${dictionary.base.size.toLocaleString()} 見出し、登録・学習 ${Object.keys(dictionary.user).length.toLocaleString()} 見出し。${resource ? 'SKK-JISYO.L を使用中。' : 'SKK-JISYO.L を読み込めなかったため内蔵小辞書を使用中。'}追加辞書をローカルから読み込めます。入力内容の送信は行いません。`;
     const encoding = document.createElement('select');
     for (const [value, label] of [['auto', '自動判定 (UTF-8 → EUC-JP)'], ['utf-8', 'UTF-8'], ['euc-jp', 'EUC-JP']]) {
       const option = document.createElement('option'); option.value = value!; option.textContent = label!; encoding.append(option);
@@ -154,7 +161,7 @@ async function main(): Promise<void> {
         const imported = new Dictionary(source);
         if (!imported.base.size) throw new Error('SKK 形式の見出しが見つかりません。');
         await GM_setValue(SOURCE_KEY, source);
-        dictionary.base = new Dictionary(starterDictionary + '\n' + source).base;
+        dictionary.base = mergeDictionaries(imported, defaultDictionary);
         message.textContent = `${file.name}: ${imported.base.size.toLocaleString()} 見出しを保存しました。以前の取込辞書を置換しました。`;
       } catch (error) { message.textContent = `読込失敗: ${error instanceof Error ? error.message : String(error)}`; }
     })(); });

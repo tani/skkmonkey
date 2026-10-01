@@ -4,6 +4,8 @@ import { chromium, firefox } from 'playwright';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
 
+const upstreamResource = process.env.SKK_TEST_DICTIONARY_PATH
+  ? (await readFile(process.env.SKK_TEST_DICTIONARY_PATH)).toString('base64') : null;
 const script = await readFile(new URL('../dist/skk-ime.user.js', import.meta.url), 'utf8');
 const html = `<!doctype html><html lang="ja"><meta charset="utf-8"><title>SKK test fixture</title>
 <style>body{font:18px system-ui;margin:35px}textarea,input,[contenteditable]{display:block;width:500px;margin:16px;padding:12px;border:1px solid #aaa}textarea{height:100px}[contenteditable]{white-space:pre-wrap}</style>
@@ -34,7 +36,15 @@ try {
       page.setDefaultTimeout(8000);
       page.setDefaultNavigationTimeout(8000);
       const errors = []; page.on('pageerror', e => errors.push(String(e)));
-      await page.addInitScript(() => {
+      await page.addInitScript(upstreamResource => {
+        window.GM_getResourceURL = (name, blob) => {
+          if (new URLSearchParams(location.search).get('resource') === 'full') return 'data:text/plain;base64,' + upstreamResource;
+          if (name !== 'SKK_JISYO_L') throw new Error('Unknown resource');
+          if (new URLSearchParams(location.search).get('resource') === 'missing') throw new Error('Missing resource');
+          const bytes = Uint8Array.from(atob('pLikt6TnIC+8rb3xLwo='), c => c.charCodeAt(0));
+          return new URLSearchParams(location.search).get('resource') === 'blob'
+            ? URL.createObjectURL(new Blob([bytes])) : 'data:text/plain;base64,pLikt6TnIC+8rb3xLwo=';
+        };
         window.__menus = {};
         window.GM_getValue = (key, fallback) => {
           const v = localStorage.getItem(key); return v === null ? fallback : JSON.parse(v);
@@ -48,9 +58,9 @@ try {
           if (options.mode === 'closed') window.__skkUI = root;
           return root;
         };
-      });
-      async function load() {
-        await page.goto(url); await page.addScriptTag({ content: script });
+      }, upstreamResource);
+      async function load(resource = 'data') {
+        await page.goto(url + '?resource=' + resource); await page.addScriptTag({ content: script });
         await page.waitForFunction(() => Object.keys(window.__menus).length === 3);
       }
       async function reset(selector = '#text', text = '') {
@@ -82,6 +92,8 @@ try {
       await typeKeys('Kanji '); await page.keyboard.press('Escape'); await page.keyboard.press('Escape');
       await panel.waitFor({ state: 'hidden' });
       console.log(`${name}: idle hiding, temporary mode badge, preedit, compact candidates, blur, confirmation and cancellation passed`);
+      await reset(); await typeKeys('Jisho '); assert.match(await uiText(), /▼辞書/);
+      await page.keyboard.press('Escape'); await page.keyboard.press('Escape');
       await reset(); await typeKeys("kon'nichiha"); assert.equal(await page.locator('#text').inputValue(), 'こんにちは');
 
       await reset(); await typeKeys('Kanji');
@@ -159,9 +171,11 @@ try {
       // Import a local UTF-8 dictionary through the actual settings UI.
       await page.evaluate(() => window.__menus['SKK: 辞書設定 / Dictionary settings']());
       await page.getByLabel('SKK 辞書ファイル').setInputFiles({ name: 'SKK-JISYO.test', mimeType: 'text/plain',
-        buffer: Buffer.from('てすと /試験;annotation/<img onerror=alert(1)>/' + '長い候補'.repeat(40) + '/四番/五番/六番/\n', 'utf8') });
-      await page.waitForFunction(() => window.__skkUI.textContent.includes('1 見出しを保存'));
+        buffer: Buffer.from('てすと /試験;annotation/<img onerror=alert(1)>/' + '長い候補'.repeat(40) + '/四番/五番/六番/\nじしょ /字書/\n', 'utf8') });
+      await page.waitForFunction(() => window.__skkUI.textContent.includes('2 見出しを保存'));
       await page.getByRole('button', { name: '閉じる', exact: true }).click();
+      await reset(); await typeKeys('Jisho '); assert.match(await uiText(), /▼字書/);
+      await page.keyboard.press('Space'); assert.match(await uiText(), /▼辞書/); await page.keyboard.press('Enter');
       await reset(); await typeKeys('Tesuto '); assert.match(await uiText(), /▼試験/);
       await page.keyboard.press('Space'); assert.match(await uiText(), /<img onerror=alert\(1\)>/);
       assert.equal(await page.locator('img').count(), 0);
@@ -178,6 +192,23 @@ try {
 
       await reset(); await typeKeys('KaKu');
       await page.screenshot({ path: new URL(`../test-results/${name}.png`, import.meta.url).pathname });
+      await load('blob'); await reset(); await typeKeys('Jisho '); assert.match(await uiText(), /▼辞書/);
+      await page.keyboard.press('Enter');
+      await page.evaluate(() => window.__menus['SKK: 辞書設定 / Dictionary settings']());
+      assert.match(await uiText(), /SKK-JISYO.L を使用中/);
+      await load('missing'); await reset(); await typeKeys('Nihon '); assert.match(await uiText(), /▼日本/);
+      await page.keyboard.press('Enter');
+      await page.evaluate(() => window.__menus['SKK: 辞書設定 / Dictionary settings']());
+      assert.match(await uiText(), /内蔵小辞書を使用中/);
+      if (upstreamResource) {
+        await load('full'); await reset(); await typeKeys('Nihon '); assert.match(await uiText(), /▼日本/);
+        await page.keyboard.press('Enter'); assert.equal(await page.locator('#text').inputValue(), '日本');
+        await page.evaluate(() => window.__menus['SKK: 辞書設定 / Dictionary settings']());
+        assert.match(await uiText(), /SKK-JISYO.L を使用中/);
+        const count = Number((await page.locator('.dialog p').first().textContent()).match(/現在 ([\d,]+) 見出し/)[1].replaceAll(',', ''));
+        assert.ok(count > 100000, count);
+        console.log(`${name}: real SKK-JISYO.L EUC-JP resource (${count} entries) passed`);
+      }
       assert.deepEqual(errors, []);
       console.log(`${name}: input, candidate/okuri, selection, controlled input, rich-text undo, shadow DOM, excluded fields, cancellation, registration, persistence, dictionary import and text safety passed`);
     } finally { await browser.close(); }
