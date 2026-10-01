@@ -17,7 +17,7 @@ export default defineConfig({
   },
   test: { include: ['test/*.test.ts'], environment: 'node', restoreMocks: true },
   lint: {
-    ignorePatterns: ['dist/**', 'test-results/**', 'test/editors/**/profiles/**'],
+    ignorePatterns: ['dist/**', 'test-results/**', 'test/editors/**'],
     options: { typeAware: true, typeCheck: true },
   },
   fmt: {

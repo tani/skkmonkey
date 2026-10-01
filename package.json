@@ -10,31 +10,17 @@
     "typecheck": "vp check --no-fmt --no-lint",
     "test": "vp test run",
     "test:browser": "node scripts/browser-test.mjs",
-    "test:editors": "node scripts/editor-test.mjs",
+    "test:editors": "vp run typecheck:editors && node scripts/editor-test.mjs",
     "check": "vp check && vp test run && vp build && vp run test:browser && vp run test:editors",
     "test:editors:matrix": "node scripts/editor-matrix.mjs",
     "dev": "vp dev",
     "lint": "vp check --no-fmt",
-    "fmt": "vp fmt"
+    "fmt": "vp fmt",
+    "typecheck:editors": "node scripts/editor-install.mjs && vp lint --config test/editors/oxlint.json --tsconfig test/editors/tsconfig.json test/editors/*/fixture.ts test/editors/codemirror5.d.ts"
   },
   "devDependencies": {
-    "@codemirror/commands": "^6.11.1",
-    "@codemirror/state": "^6.7.6",
-    "@codemirror/view": "^6.43.13",
-    "@tiptap/core": "^3.31.4",
-    "@tiptap/starter-kit": "^3.31.4",
-    "@types/codemirror": "^5.60.18",
-    "@types/node": "^24.0.0",
-    "codemirror5": "npm:codemirror@^5.65.21",
-    "monaco-editor": "^0.57.0",
+    "@types/node": "24.19.0",
     "playwright": "1.62.1",
-    "prosemirror-commands": "^1.7.2",
-    "prosemirror-history": "^1.5.1",
-    "prosemirror-model": "^1.25.12",
-    "prosemirror-schema-basic": "^1.2.5",
-    "prosemirror-state": "^1.4.4",
-    "prosemirror-view": "^1.42.6",
-    "quill": "^2.0.3",
     "vite-plus": "1.0.0"
   },
   "overrides": {
@@ -43,5 +29,6 @@
   },
   "engines": {
     "node": "^22.18.0 || ^24.11.0 || >=26.0.0"
-  }
+  },
+  "packageManager": "npm@11.9.0"
 }

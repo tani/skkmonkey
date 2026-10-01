@@ -4,5 +4,8 @@
   "type": "module",
   "dependencies": {
     "codemirror5": "npm:codemirror@5.65.21"
+  },
+  "devDependencies": {
+    "@types/codemirror": "5.60.18"
   }
 }

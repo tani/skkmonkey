@@ -17,6 +17,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx vp check && npx vp test run && npx vp build
+      - run: npx vp run typecheck:editors
       - run: npx playwright install --with-deps chromium firefox
       - run: npx vp run test:browser
   editors:

@@ -141,7 +141,11 @@ editor fixtures use Vite+ / Rolldown; Playwright drives Chromium and Firefox.
 The npm lockfile pins Vite+ and its bundled tools; no global Vite+ install is needed.
 `npm run check` runs formatting, linting, type checking, engine tests, the userscript build, and
 browser/editor integration tests. Use `npm run build` to regenerate
-`dist/skk-ime.user.js`. Editor libraries are test dependencies only.
+`dist/skk-ime.user.js`. Root dev dependencies are only `vite-plus`, `playwright`,
+and `@types/node`, pinned to exact versions. Editor libraries and CodeMirror 5
+types are installed only in their editor profiles; they are absent from the
+root dependency tree. Core build, unit tests, and static checks need no editor
+installation.
 
 ### Editor modules and version matrix
 
@@ -173,7 +177,13 @@ SKK_TEST_BROWSERS=firefox npm run test:editors:matrix -- --install quill/legacy 
 npm run test:editors:matrix -- monaco/legacy
 ```
 
-`npm run test:editors` retains the fast combined baseline fixture.
+`npm run test:editors` installs the six current profiles, checks their fixture
+types with Vite+ / Oxlint, and builds the combined baseline fixture from those
+profile trees. It does not maintain a second editor dependency set at the root.
+`npm run typecheck:editors` runs the same installation and fixture type checks
+without launching browsers. `test/editors/tsconfig.json` resolves fixture types
+from the current profiles; `test/editors/oxlint.json` keeps that dependency scope
+separate from the core checks. Legacy profiles are checked through browser tests.
 GitHub Actions checks all profiles on both browsers for pushes, pull requests and
 manual runs, with four jobs at a time. Reports are written to
 `test-results/editor-matrix.json`; screenshots are separated by editor/profile

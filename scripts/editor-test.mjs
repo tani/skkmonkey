@@ -14,7 +14,7 @@ const profile = profilePath
 const profileDir = profilePath
   ? fileURLToPath(new URL('.', new URL(profilePath, new URL('../', import.meta.url))))
   : null;
-const dependencyDir = profileDir ?? fileURLToPath(new URL('../', import.meta.url));
+
 const label = profile ? `${profile.editor}/${profile.name}` : 'baseline';
 const ids = profile?.fixtures ?? ['monaco', 'monaco-native', 'cm5', 'cm6', 'pm', 'tiptap', 'quill'];
 const dir = new URL(`../test-results/editors/${label}/`, import.meta.url);
@@ -45,6 +45,12 @@ await build({
         // Resolve from the chosen locked tree, also bypassing Monaco's
         // version-dependent export maps for its worker entry. Transitive
         // dependencies stay inside this tree.
+        const editor = importer
+          .slice(fileURLToPath(new URL('../test/editors/', import.meta.url)).length)
+          .split('/')[0];
+        const dependencyDir =
+          profileDir ??
+          fileURLToPath(new URL(`../test/editors/${editor}/profiles/current/`, import.meta.url));
         const result = await this.resolve(
           resolve(dependencyDir, 'node_modules', source),
           importer,

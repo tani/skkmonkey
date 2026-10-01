@@ -1,0 +1,26 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "codemirror5": ["./codemirror5.d.ts"],
+      "@codemirror/view": ["./codemirror6/profiles/current/node_modules/@codemirror/view"],
+      "@codemirror/state": ["./codemirror6/profiles/current/node_modules/@codemirror/state"],
+      "@codemirror/commands": ["./codemirror6/profiles/current/node_modules/@codemirror/commands"],
+      "monaco-editor": ["./monaco/profiles/current/node_modules/monaco-editor/esm/vs/index.d.ts"],
+      "prosemirror-state": ["./prosemirror/profiles/current/node_modules/prosemirror-state"],
+      "prosemirror-view": ["./prosemirror/profiles/current/node_modules/prosemirror-view"],
+      "prosemirror-model": ["./prosemirror/profiles/current/node_modules/prosemirror-model"],
+      "prosemirror-schema-basic": [
+        "./prosemirror/profiles/current/node_modules/prosemirror-schema-basic"
+      ],
+      "prosemirror-history": ["./prosemirror/profiles/current/node_modules/prosemirror-history"],
+      "prosemirror-commands": ["./prosemirror/profiles/current/node_modules/prosemirror-commands"],
+      "prosemirror-keymap": ["./prosemirror/profiles/current/node_modules/prosemirror-keymap"],
+      "@tiptap/core": ["./tiptap/profiles/current/node_modules/@tiptap/core"],
+      "@tiptap/starter-kit": ["./tiptap/profiles/current/node_modules/@tiptap/starter-kit"],
+      "quill": ["./quill/profiles/current/node_modules/quill"],
+      "codemirror": ["./codemirror5/profiles/current/node_modules/@types/codemirror"]
+    }
+  },
+  "include": ["*/fixture.ts", "codemirror5.d.ts", "../vite-env.d.ts"]
+}

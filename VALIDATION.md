@@ -77,3 +77,12 @@ A clean root `npm ci` succeeded with the locked Vite+ toolchain. `vp check`
 passed without format, lint, or type errors or warnings. The Vite dev page
 loaded its modules and converted `kana` to `かな` in Chromium. Monaco fixtures
 use Vite-built editor workers for both versions.
+
+## Dependency isolation
+
+Root dev dependencies are limited to Vite+, Playwright, and Node.js types.
+The combined fixture now resolves each editor from its own current profile,
+rather than from a duplicated root dependency set. CodeMirror 5 types are in
+its current profile. Core static checks and current fixture type checks run
+separately; the latter use the dedicated editor TypeScript and Oxlint configs.
+The root lockfile contains no editor packages.
