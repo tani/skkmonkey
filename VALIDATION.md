@@ -1,4 +1,4 @@
-# Validation — v0.2.3, 2026-10-01
+# Validation — v0.2.4, 2026-10-01
 
 - Node.js 24.19.0: TypeScript strict typecheck passed; 21 Node tests passed.
 - esbuild: standalone `dist/skk-ime.user.js` built successfully.
@@ -79,10 +79,10 @@ with `SKK_TEST_DICTIONARY_PATH=/path/to/SKK-JISYO.L npm run test:browser`.
 
 ## Late Shift release
 
-Engine regressions cover consecutive uppercase prefixes (`XX`, `KA`, `KAKU`,
-`KAnji`, `KANJI`), subsequent lowercase-to-uppercase okuri (`TAbeRu`, `;kaKu`),
-abbreviation case preservation and reset after confirmation/cancellation/mode
-changes. Chromium and Firefox also exercise Shift-down uppercase input followed
-by Shift release, explicit conversion, all-uppercase reading and normal `KaKu`.
-Strict typecheck, all 21 unit tests, both DOM integration suites and every real
-editor configuration passed with the rebuilt v0.2.3 userscript.
+Uppercase letters complete unfinished romaji before starting okuri at a kana
+boundary. Engine regressions verify `KAKu` and `KAKU` match `KaKu`, and `YOI`
+matches `YoI`. `XX`, `KA`, `YO`, `NI`, `SHI` and `KAnji` remain readings until a
+boundary starts conversion. Tests retain pending-n behavior (`ShinDa`), check
+`SHINu`, abbreviation case preservation and input after confirmation/cancellation/
+mode changes. Browser tests check `KAKu`/`KaKu` and `YOI`/`YoI` with candidate
+confirmation, plus actual Shift-down/up events during `KAnji` input.

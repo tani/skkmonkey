@@ -107,9 +107,9 @@ try {
       await page.keyboard.up('Shift'); await typeKeys('nji'); assert.match(await uiText(), /▽かんじ/);
       await page.keyboard.press('Space'); assert.match(await uiText(), /▼感じ/);
       await page.keyboard.press('Enter'); assert.equal(await page.locator('#text').inputValue(), '感じ');
-      await reset(); await typeKeys('KAKU'); assert.match(await uiText(), /▽かく/);
+      await reset(); await typeKeys('KAKu'); assert.match(await uiText(), /▼書く/);
       assert.equal(await page.locator('.backdrop').isVisible(), false);
-      await page.keyboard.press('Escape');
+      await page.keyboard.press('Enter'); assert.equal(await page.locator('#text').inputValue(), '書く');
       await reset(); await typeKeys('KaKu'); await page.keyboard.press('Enter');
       assert.equal(await page.locator('#text').inputValue(), '書く');
       await reset(); await typeKeys('Nihon '); await page.keyboard.press('Escape'); await page.keyboard.press('Escape');
@@ -178,9 +178,13 @@ try {
       // Import a local UTF-8 dictionary through the actual settings UI.
       await page.evaluate(() => window.__menus['SKK: 辞書設定 / Dictionary settings']());
       await page.getByLabel('SKK 辞書ファイル').setInputFiles({ name: 'SKK-JISYO.test', mimeType: 'text/plain',
-        buffer: Buffer.from('てすと /試験;annotation/<img onerror=alert(1)>/' + '長い候補'.repeat(40) + '/四番/五番/六番/\nじしょ /字書/\n', 'utf8') });
-      await page.waitForFunction(() => window.__skkUI.textContent.includes('2 見出しを保存'));
+        buffer: Buffer.from('てすと /試験;annotation/<img onerror=alert(1)>/' + '長い候補'.repeat(40) + '/四番/五番/六番/\nじしょ /字書/\nよi /良/\n', 'utf8') });
+      await page.waitForFunction(() => window.__skkUI.textContent.includes('3 見出しを保存'));
       await page.getByRole('button', { name: '閉じる', exact: true }).click();
+      for (const text of ['YoI', 'YOI']) {
+        await reset(); await typeKeys(text); assert.match(await uiText(), /▼良い/);
+        await page.keyboard.press('Enter'); assert.equal(await page.locator('#text').inputValue(), '良い');
+      }
       await reset(); await typeKeys('Jisho '); assert.match(await uiText(), /▼字書/);
       await page.keyboard.press('Space'); assert.match(await uiText(), /▼辞書/); await page.keyboard.press('Enter');
       await reset(); await typeKeys('Tesuto '); assert.match(await uiText(), /▼試験/);

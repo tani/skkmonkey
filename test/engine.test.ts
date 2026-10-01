@@ -36,9 +36,9 @@ test('okuri converts automatically and uses canonical kana consonants', () => {
   type(e, 'MaChi'); assert.equal(e.key, 'まt'); assert.equal(e.handle('Enter').committed, '待ち');
 });
 
-test('uppercase prefixes keep reading until lowercase arms a later uppercase okuri', () => {
+test('uppercase letters complete pending syllables before starting okuri', () => {
   const e = make();
-  for (const text of ['XX', 'KA', 'KAKU', 'KAnji', 'KANJI']) {
+  for (const text of ['XX', 'KA', 'YO', 'NI', 'SHI', 'KAnji']) {
     for (const key of text) {
       const result = e.handle(key);
       assert.equal(result.registration, undefined, text);
@@ -50,12 +50,22 @@ test('uppercase prefixes keep reading until lowercase arms a later uppercase oku
   }
   type(e, 'KAnji'); assert.equal(e.preedit, '▽かんじ');
   e.handle(' '); assert.equal(e.preedit, '▼漢字'); e.handle('Enter');
-  type(e, 'KAKU'); assert.equal(e.preedit, '▽かく'); e.handle('Escape');
+  for (const text of ['KaKu', 'KAKu', 'KAKU']) {
+    type(e, text); assert.equal(e.preedit, '▼書く', text);
+    assert.equal(e.handle('Enter').committed, '書く', text);
+  }
+  e.dictionary.base.set('よi', [{ text: '良' }]);
+  for (const text of ['YoI', 'YOI']) {
+    type(e, text); assert.equal(e.key, 'よi', text); assert.equal(e.preedit, '▼良い', text);
+    assert.equal(e.handle('Enter').committed, '良い', text);
+  }
+  e.dictionary.base.set('しn', [{ text: '死' }]);
+  type(e, 'SHINu'); assert.equal(e.preedit, '▼死ぬ'); e.handle('Enter');
   type(e, 'TAbeRu'); assert.equal(e.preedit, '▼食べる'); e.handle('Enter');
   type(e, ';kaKu'); assert.equal(e.preedit, '▼書く'); e.handle('Enter');
   type(e, '/HTTP '); assert.equal(e.abbrev, true); assert.equal(e.reading, 'HTTP'); e.handle('Escape');
 });
-test('uppercase-prefix protection resets after confirmation, cancellation and mode changes', () => {
+test('uppercase syllable handling works after confirmation, cancellation and mode changes', () => {
   const e = make();
   type(e, 'Ka'); e.handle('Enter'); type(e, 'KA'); assert.equal(e.preedit, '▽か');
   e.handle('Escape'); type(e, 'Ka'); e.handle('Escape'); type(e, 'KA'); assert.equal(e.preedit, '▽か');

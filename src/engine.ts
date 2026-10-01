@@ -18,7 +18,6 @@ export class Engine {
   candidates: Candidate[] = [];
   index = 0;
   private output = '';
-  private readingHasLowercase = false;
   private request: Result['registration'];
   readonly dictionary: Dictionary;
   constructor(dictionary: Dictionary) { this.dictionary = dictionary; }
@@ -34,7 +33,6 @@ export class Engine {
   reset(): void {
     this.phase = 'direct'; this.reading = ''; this.okuri = ''; this.okuriCode = '';
     this.abbrev = false; this.romaji.pending = ''; this.candidates = []; this.index = 0;
-    this.readingHasLowercase = false;
   }
   setMode(mode: Mode): string { const committed = this.finish(); this.mode = mode; return committed; }
   finish(): string {
@@ -146,20 +144,19 @@ export class Engine {
       if (this.phase === 'direct') this.phase = 'reading';
       return true;
     }
-    // Holding Shift a little too long (e.g. KAnji or KAKU) must keep
-    // extending the reading, not accidentally start okuri and conversion.
-    // Arm okuri only after a lowercase letter in this reading: KaKu still
-    // starts okuri at K, while an uninterrupted uppercase prefix does not.
+    // A late Shift release must not split an unfinished romaji syllable:
+    // KA completes か and YO completes よ, so KAKu behaves like KaKu and
+    // YOI like YoI. Start okuri at a syllable boundary, regardless of case
+    // history. Pending n may be flushed as ん (ShinDa), but initial N alone
+    // is not a reading stem and NI must still complete に.
     if (/^[A-Z]$/.test(key)) {
       if (this.phase === 'direct') {
         this.append(this.romaji.flush()); this.phase = 'reading';
-      } else if (this.phase === 'reading' && this.readingHasLowercase && (this.reading || this.romaji.pending)) {
+      } else if (this.phase === 'reading' && this.reading && commandBoundary) {
         this.append(this.romaji.flush());
         this.phase = 'okuri'; this.okuriCode = key.toLowerCase();
       }
       key = key.toLowerCase();
-    } else if (this.phase === 'reading' && /^[a-z]$/.test(key)) {
-      this.readingHasLowercase = true;
     }
     const text = this.romaji.feed(key);
     this.append(text);
