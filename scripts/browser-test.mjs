@@ -61,6 +61,27 @@ try {
       async function uiText() { return page.evaluate(() => window.__skkUI.textContent); }
       await load();
       console.log(`${name}: loaded`);
+      const panel = page.locator('.panel');
+      await page.locator('#text').focus();
+      await panel.waitFor({ state: 'hidden' });
+      await page.keyboard.press('Control+j');
+      await panel.waitFor({ state: 'visible' });
+      await panel.waitFor({ state: 'hidden' });
+      await typeKeys('k');
+      await panel.waitFor({ state: 'visible' });
+      await typeKeys('a');
+      await panel.waitFor({ state: 'hidden' });
+      await typeKeys('Kanji ');
+      await panel.waitFor({ state: 'visible' });
+      const compact = await panel.boundingBox();
+      assert.ok(compact.width <= 320 && compact.height <= 60, JSON.stringify(compact));
+      await page.locator('#input').focus();
+      await panel.waitFor({ state: 'hidden' });
+      await reset(); await typeKeys('Kanji '); await page.keyboard.press('Enter');
+      await panel.waitFor({ state: 'hidden' });
+      await typeKeys('Kanji '); await page.keyboard.press('Escape'); await page.keyboard.press('Escape');
+      await panel.waitFor({ state: 'hidden' });
+      console.log(`${name}: idle hiding, temporary mode badge, preedit, compact candidates, blur, confirmation and cancellation passed`);
       await reset(); await typeKeys("kon'nichiha"); assert.equal(await page.locator('#text').inputValue(), 'こんにちは');
 
       await reset(); await typeKeys('Kanji');
@@ -138,13 +159,22 @@ try {
       // Import a local UTF-8 dictionary through the actual settings UI.
       await page.evaluate(() => window.__menus['SKK: 辞書設定 / Dictionary settings']());
       await page.getByLabel('SKK 辞書ファイル').setInputFiles({ name: 'SKK-JISYO.test', mimeType: 'text/plain',
-        buffer: Buffer.from('てすと /試験;annotation/<img onerror=alert(1)>/\n', 'utf8') });
+        buffer: Buffer.from('てすと /試験;annotation/<img onerror=alert(1)>/' + '長い候補'.repeat(40) + '/四番/五番/六番/\n', 'utf8') });
       await page.waitForFunction(() => window.__skkUI.textContent.includes('1 見出しを保存'));
       await page.getByRole('button', { name: '閉じる', exact: true }).click();
       await reset(); await typeKeys('Tesuto '); assert.match(await uiText(), /▼試験/);
       await page.keyboard.press('Space'); assert.match(await uiText(), /<img onerror=alert\(1\)>/);
       assert.equal(await page.locator('img').count(), 0);
-      await page.keyboard.press('Escape'); await page.keyboard.press('Escape');
+      await page.setViewportSize({ width: 280, height: 400 });
+      await page.keyboard.press('Space');
+      const small = await panel.boundingBox();
+      assert.ok(small.width <= 264 && small.height <= 60 && small.x >= 8 && small.x + small.width <= 272, JSON.stringify(small));
+      await page.keyboard.press('Space'); await page.keyboard.press('Space'); await page.keyboard.press('Space');
+      assert.equal(await page.locator('.candidates .selected').textContent(), '6. 六番');
+      await page.locator('.candidates .selected').click();
+      assert.equal(await page.locator('#text').inputValue(), '六番');
+      await panel.waitFor({ state: 'hidden' });
+      await page.setViewportSize({ width: 1000, height: 850 });
 
       await reset(); await typeKeys('KaKu');
       await page.screenshot({ path: new URL(`../test-results/${name}.png`, import.meta.url).pathname });

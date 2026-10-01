@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SKK Browser IME
 // @namespace    cc.tani.skk-userscript
-// @version      0.2.0
+// @version      0.2.1
 // @description  Local SKK Japanese input; TypeScript, skkeleton kana rules, local dictionaries
 // @match        https://*/*
 // @match        http://*/*
@@ -2419,6 +2419,12 @@ ime /IME;Input Method Editor/
     panel;
     settings;
     status = "";
+    modeNotice = false;
+    lastMode = "ascii";
+    modeTimer;
+    statusTimer;
+    refresh = () => {
+    };
     constructor(onToggle) {
       this.host.style.cssText = "all:initial;font:14px/1.5 system-ui,sans-serif;color:#182331;color-scheme:light;position:fixed;inset:0;pointer-events:none;z-index:2147483647";
       this.root = this.host.attachShadow({ mode: "closed" });
@@ -2428,10 +2434,13 @@ ime /IME;Input Method Editor/
       *{box-sizing:border-box}button,input,select{font:inherit}
       button{cursor:pointer;background:#eef3f8;border:1px solid #b6c5d6;border-radius:5px;padding:4px 9px;color:#182331}
       button:hover{background:#dce9f6}button:focus-visible{outline:2px solid #146cbd}
-      .panel{position:fixed;max-width:min(560px,95vw);max-height:40vh;overflow:auto;background:#fff;
-        border:1px solid #9caec1;box-shadow:0 3px 16px #0002;border-radius:7px;padding:8px;pointer-events:auto}
-      .head{display:flex;gap:8px;align-items:center}.preedit{font-size:18px;overflow-wrap:anywhere;white-space:pre-wrap}
-      .candidates{margin-top:5px;display:flex;gap:5px;flex-wrap:wrap}.selected{background:#146cbd;color:white}
+      .panel{position:fixed;max-width:min(320px,calc(100vw - 16px));overflow:hidden;background:#fff;
+        border:1px solid #9caec1;box-shadow:0 3px 16px #0002;border-radius:5px;padding:4px 6px;pointer-events:auto}
+      .head{display:flex;gap:6px;align-items:center;min-width:0}.head button{flex:none;padding:0 4px;font-size:12px;line-height:20px}
+      .preedit{font-size:14px;line-height:22px;white-space:pre;overflow:hidden;text-overflow:ellipsis}
+      .candidates{margin-top:2px;display:flex;gap:3px;overflow-x:auto;scrollbar-width:none}
+      .candidates::-webkit-scrollbar{display:none}.candidates button{flex:none;padding:0 5px;line-height:22px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.selected{background:#146cbd;color:white}
+      .status{max-width:100%;font-size:12px;line-height:22px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
       .note{color:#536476;font-size:12px;margin-top:5px;max-width:480px}
       .backdrop{position:fixed;inset:0;background:#0005;pointer-events:auto;display:grid;place-items:center}
       .dialog{background:white;border-radius:10px;padding:24px;width:min(590px,95vw);max-height:90vh;overflow:auto}
@@ -2455,10 +2464,25 @@ ime /IME;Input Method Editor/
     }
     message(text) {
       this.status = text;
+      clearTimeout(this.statusTimer);
+      this.statusTimer = setTimeout(() => {
+        this.status = "";
+        this.refresh();
+      }, 3500);
     }
     render(engine, editor, choose) {
-      this.panel.hidden = !editor;
-      if (!editor) return;
+      this.refresh = () => this.render(engine, editor, choose);
+      if (engine.mode !== this.lastMode) {
+        this.lastMode = engine.mode;
+        this.modeNotice = true;
+        clearTimeout(this.modeTimer);
+        this.modeTimer = setTimeout(() => {
+          this.modeNotice = false;
+          this.refresh();
+        }, 800);
+      }
+      this.panel.hidden = !editor || !this.settings.hidden || !(engine.active || this.modeNotice || this.status);
+      if (!editor || this.panel.hidden) return;
       this.panel.replaceChildren();
       const head = document.createElement("div");
       head.className = "head";
@@ -2469,6 +2493,7 @@ ime /IME;Input Method Editor/
       const preedit = document.createElement("span");
       preedit.className = "preedit";
       preedit.textContent = engine.preedit;
+      preedit.title = engine.preedit;
       preedit.setAttribute("aria-live", "polite");
       head.append(badge, preedit);
       this.panel.append(head);
@@ -2479,20 +2504,26 @@ ime /IME;Input Method Editor/
         engine.candidates.slice(start, start + 5).forEach((candidate, offset) => {
           const button = document.createElement("button");
           button.textContent = `${start + offset + 1}. ${candidate.text}${engine.display(engine.okuri)}`;
-          button.title = candidate.annotation ?? "";
+          button.title = `${candidate.text}${engine.display(engine.okuri)}${candidate.annotation ? " — " + candidate.annotation : ""}`;
           button.classList.toggle("selected", start + offset === engine.index);
           button.setAttribute("aria-pressed", String(start + offset === engine.index));
           button.addEventListener("click", () => choose(start + offset));
           candidates.append(button);
         });
         this.panel.append(candidates);
+        const selected = candidates.querySelector(".selected");
+        if (selected) candidates.scrollLeft = Math.max(0, selected.offsetLeft - candidates.offsetLeft - (candidates.clientWidth - selected.offsetWidth) / 2);
       }
-      const note = document.createElement("div");
-      note.className = "note";
-      note.textContent = this.status || (engine.mode === "ascii" ? "Ctrl+J: かな入力" : "Shift: 変換開始 · Space: 次候補 · x: 前候補 · Enter: 確定 · Ctrl+G: 取消");
-      this.panel.append(note);
+      if (this.status && !engine.active) {
+        const note = document.createElement("span");
+        note.className = "status";
+        note.textContent = this.status;
+        note.title = this.status;
+        note.setAttribute("role", "status");
+        preedit.replaceWith(note);
+      }
       const rect = (componentFor(editor)?.root ?? editor).getBoundingClientRect();
-      this.panel.style.left = Math.max(8, Math.min(rect.left, innerWidth - Math.min(560, this.panel.offsetWidth) - 8)) + "px";
+      this.panel.style.left = Math.max(8, Math.min(rect.left, innerWidth - this.panel.offsetWidth - 8)) + "px";
       const height = this.panel.offsetHeight;
       const bottom = rect.bottom + 5;
       this.panel.style.top = Math.max(8, bottom + height < innerHeight ? bottom : Math.min(rect.top - height - 5, innerHeight - height - 8)) + "px";
@@ -2500,6 +2531,7 @@ ime /IME;Input Method Editor/
     dialog(title) {
       this.settings.replaceChildren();
       this.settings.hidden = false;
+      this.panel.hidden = true;
       const dialog = document.createElement("div");
       dialog.className = "dialog";
       dialog.setAttribute("role", "dialog");

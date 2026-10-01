@@ -43,7 +43,10 @@ if desired. It requires page execution context; keep `@sandbox raw` and
 
 Use `n'` before a vowel or `y`: `kon'nichiha` → `こんにちは`.
 The rule `nn` consumes both letters as `ん`.
-Pending input appears in a floating panel and enters the editor on confirmation.
+The panel stays hidden while idle. Pending input appears in a compact floating
+panel (at most two rows, up to 320 px wide) and enters the editor on confirmation.
+Mode changes briefly show a badge; candidates scroll horizontally, and full text
+and annotations are available on hover. Settings remain in the manager menu.
 Moving the caret or leaving the field commits pending input.
 
 ## Dictionaries
