@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SKK Browser IME
 // @namespace    cc.tani.skk-userscript
-// @version      0.2.2
+// @version      0.2.3
 // @description  Local SKK Japanese input; TypeScript, skkeleton kana rules, local dictionaries
 // @match        https://*/*
 // @match        http://*/*
@@ -1941,6 +1941,7 @@ freely, subject to the following restrictions:
     candidates = [];
     index = 0;
     output = "";
+    readingHasLowercase = false;
     request;
     dictionary;
     constructor(dictionary) {
@@ -1969,6 +1970,7 @@ freely, subject to the following restrictions:
       this.romaji.pending = "";
       this.candidates = [];
       this.index = 0;
+      this.readingHasLowercase = false;
     }
     setMode(mode) {
       const committed = this.finish();
@@ -2113,12 +2115,14 @@ freely, subject to the following restrictions:
         if (this.phase === "direct") {
           this.append(this.romaji.flush());
           this.phase = "reading";
-        } else if (this.phase === "reading" && (this.reading || this.romaji.pending)) {
+        } else if (this.phase === "reading" && this.readingHasLowercase && (this.reading || this.romaji.pending)) {
           this.append(this.romaji.flush());
           this.phase = "okuri";
           this.okuriCode = key.toLowerCase();
         }
         key = key.toLowerCase();
+      } else if (this.phase === "reading" && /^[a-z]$/.test(key)) {
+        this.readingHasLowercase = true;
       }
       const text = this.romaji.feed(key);
       this.append(text);

@@ -41,6 +41,11 @@ if desired. It requires page execution context; keep `@sandbox raw` and
 | `l` / `L` | ASCII / fullwidth ASCII; Ctrl+J returns to hiragana |
 | `/` | Abbreviation mode: `/skk` + Space → `SKK` |
 
+Consecutive uppercase letters at the start continue the reading: `KAnji` and
+`KANJI` both produce `▽かんじ`. Okuri starts at an uppercase letter only after
+a lowercase letter in that reading (`KaKu` or `TAbeRu`). This tolerates releasing
+Shift late; an entirely uppercase `KAKU` stays `▽かく` until explicit conversion.
+
 Use `n'` before a vowel or `y`: `kon'nichiha` → `こんにちは`.
 The rule `nn` consumes both letters as `ん`.
 The panel stays hidden while idle. Pending input appears in a compact floating

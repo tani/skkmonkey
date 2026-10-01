@@ -103,6 +103,13 @@ try {
       assert.equal(await page.locator('#text').inputValue(), '感じ');
       assert.equal(await page.evaluate(() => window.submits), 0);
 
+      await reset(); await page.keyboard.down('Shift'); await page.keyboard.press('K'); await page.keyboard.press('A');
+      await page.keyboard.up('Shift'); await typeKeys('nji'); assert.match(await uiText(), /▽かんじ/);
+      await page.keyboard.press('Space'); assert.match(await uiText(), /▼感じ/);
+      await page.keyboard.press('Enter'); assert.equal(await page.locator('#text').inputValue(), '感じ');
+      await reset(); await typeKeys('KAKU'); assert.match(await uiText(), /▽かく/);
+      assert.equal(await page.locator('.backdrop').isVisible(), false);
+      await page.keyboard.press('Escape');
       await reset(); await typeKeys('KaKu'); await page.keyboard.press('Enter');
       assert.equal(await page.locator('#text').inputValue(), '書く');
       await reset(); await typeKeys('Nihon '); await page.keyboard.press('Escape'); await page.keyboard.press('Escape');

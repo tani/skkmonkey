@@ -1,6 +1,6 @@
-# Validation — v0.2.2, 2026-10-01
+# Validation — v0.2.3, 2026-10-01
 
-- Node.js 24.19.0: TypeScript strict typecheck passed; 19 Node tests passed.
+- Node.js 24.19.0: TypeScript strict typecheck passed; 21 Node tests passed.
 - esbuild: standalone `dist/skk-ime.user.js` built successfully.
 - Playwright 1.62.1: the actual bundle passed integration checks in Firefox 153
   and Chromium 153 using a local fixture and userscript-manager API shims.
@@ -45,7 +45,7 @@ EditContext also checks that its buffer matches the model after synchronization.
 Monaco and both CodeMirror generations additionally check multiple-cursor
 insertion; ProseMirror additionally checks preservation of strong marks.
 
-All checks in `npm run check` passed (browser executables supplied via environment): strict typecheck, 19 engine/resource tests, existing
+All checks in `npm run check` passed (browser executables supplied via environment): strict typecheck, 21 engine/resource tests, existing
 DOM integration tests on both browsers, and all real component configurations.
 Tests use each editor's default keymap/history configuration, except the explicit
 read-only and multiple-selection cases. Unsupported/custom configurations and
@@ -76,3 +76,13 @@ tested in a live Tampermonkey/Violentmonkey session.
 
 To repeat the optional full-dictionary integration check, provide an EUC-JP copy
 with `SKK_TEST_DICTIONARY_PATH=/path/to/SKK-JISYO.L npm run test:browser`.
+
+## Late Shift release
+
+Engine regressions cover consecutive uppercase prefixes (`XX`, `KA`, `KAKU`,
+`KAnji`, `KANJI`), subsequent lowercase-to-uppercase okuri (`TAbeRu`, `;kaKu`),
+abbreviation case preservation and reset after confirmation/cancellation/mode
+changes. Chromium and Firefox also exercise Shift-down uppercase input followed
+by Shift release, explicit conversion, all-uppercase reading and normal `KaKu`.
+Strict typecheck, all 21 unit tests, both DOM integration suites and every real
+editor configuration passed with the rebuilt v0.2.3 userscript.

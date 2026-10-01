@@ -35,6 +35,33 @@ test('okuri converts automatically and uses canonical kana consonants', () => {
   e.dictionary.base.set('まt', [{ text: '待' }]);
   type(e, 'MaChi'); assert.equal(e.key, 'まt'); assert.equal(e.handle('Enter').committed, '待ち');
 });
+
+test('uppercase prefixes keep reading until lowercase arms a later uppercase okuri', () => {
+  const e = make();
+  for (const text of ['XX', 'KA', 'KAKU', 'KAnji', 'KANJI']) {
+    for (const key of text) {
+      const result = e.handle(key);
+      assert.equal(result.registration, undefined, text);
+      assert.equal(result.committed, '', text);
+      assert.equal(e.phase, 'reading', text);
+      assert.equal(e.okuriCode, '', text);
+    }
+    e.handle('Escape');
+  }
+  type(e, 'KAnji'); assert.equal(e.preedit, '▽かんじ');
+  e.handle(' '); assert.equal(e.preedit, '▼漢字'); e.handle('Enter');
+  type(e, 'KAKU'); assert.equal(e.preedit, '▽かく'); e.handle('Escape');
+  type(e, 'TAbeRu'); assert.equal(e.preedit, '▼食べる'); e.handle('Enter');
+  type(e, ';kaKu'); assert.equal(e.preedit, '▼書く'); e.handle('Enter');
+  type(e, '/HTTP '); assert.equal(e.abbrev, true); assert.equal(e.reading, 'HTTP'); e.handle('Escape');
+});
+test('uppercase-prefix protection resets after confirmation, cancellation and mode changes', () => {
+  const e = make();
+  type(e, 'Ka'); e.handle('Enter'); type(e, 'KA'); assert.equal(e.preedit, '▽か');
+  e.handle('Escape'); type(e, 'Ka'); e.handle('Escape'); type(e, 'KA'); assert.equal(e.preedit, '▽か');
+  e.handle('C-j'); type(e, 'KA'); assert.equal(e.preedit, '▽か'); e.handle('Escape');
+  type(e, 'KaKu'); assert.equal(e.preedit, '▼書く');
+});
 test('nasal immediately before uppercase okuri and doubled okuri consonants', () => {
   const e = make(); e.dictionary.base.set('しんd', [{ text: '死ん' }]);
   type(e, 'ShinDa'); assert.equal(e.preedit, '▼死んだ'); e.handle('Enter');
