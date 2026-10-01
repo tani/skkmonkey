@@ -13,7 +13,6 @@
     "test:editors": "vp run typecheck:editors && node scripts/editor-test.mjs",
     "check": "vp check && vp test run && vp build && vp run test:browser && vp run test:editors",
     "test:editors:matrix": "node scripts/editor-matrix.mjs",
-    "dev": "vp dev",
     "lint": "vp check --no-fmt",
     "fmt": "vp fmt",
     "typecheck:editors": "node scripts/editor-install.mjs && vp lint --config test/editors/oxlint.json --tsconfig test/editors/tsconfig.json test/editors/*/fixture.ts test/editors/codemirror5.d.ts"

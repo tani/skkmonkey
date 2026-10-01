@@ -71,11 +71,9 @@ editor fixtures, Vitest for the 21 unit tests, Oxlint for lint and type checking
 and Oxfmt for maintained sources. `vite.config.ts` holds the shared toolchain
 configuration; the generated kana table and dependency profiles are excluded
 from formatting. Playwright remains the browser automation layer.
-The dev page (`npm run dev`) uses the bundled starter dictionary.
 
 A clean root `npm ci` succeeded with the locked Vite+ toolchain. `vp check`
-passed without format, lint, or type errors or warnings. The Vite dev page
-loaded its modules and converted `kana` to `かな` in Chromium. Monaco fixtures
+passed without format, lint, or type errors or warnings. Monaco fixtures
 use Vite-built editor workers for both versions.
 
 ## Dependency isolation

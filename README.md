@@ -129,7 +129,6 @@ npm run check
 ```
 
 ```sh
-npm run dev       # Vite development page with HMR
 npx vp check      # Oxfmt + Oxlint + TypeScript checks
 npx vp test run   # Vitest unit tests
 npx vp build      # Standalone userscript with metadata header
