@@ -2,3 +2,8 @@ node_modules/
 test-results/
 .vite/
 .vite-plus/
+target/
+project/target/
+project/project/
+.bsp/
+.metals/

@@ -5,7 +5,7 @@ export const banner = `// ==UserScript==
 // @name         SKK Browser IME
 // @namespace    cc.tani.skk-userscript
 // @version      ${pkg.version}
-// @description  Local SKK Japanese input; TypeScript, skkeleton kana rules, local dictionaries
+// @description  Local SKK Japanese input; Scala.js, skkeleton kana rules, local dictionaries
 // @match        https://*/*
 // @match        http://*/*
 // @run-at       document-end

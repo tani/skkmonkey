@@ -1,7 +1,7 @@
 # SKKMonkey
 
-A local SKK Japanese IME for Firefox and Chrome, written in TypeScript and
-built with Node.js. Runs as a userscript; no server is required and typed text
+A local SKK Japanese IME for Firefox and Chrome, written in Scala 3 and
+compiled to JavaScript with Scala.js. Runs as a userscript; no server is required and typed text
 is never sent over the network.
 
 Inspired by [skkeleton](https://github.com/vim-skk/skkeleton), with its kana and
@@ -12,7 +12,7 @@ skkeleton port.
 
 1. Install [Tampermonkey](https://www.tampermonkey.net/) or
    [Violentmonkey](https://violentmonkey.github.io/).
-2. Open [skk-ime.user.js](https://raw.githubusercontent.com/tani/skkmonkey/main/dist/skk-ime.user.js)
+2. Open [skk-ime.user.js](https://raw.githubusercontent.com/tani/skkmonkey/scala-js-rewrite/dist/skk-ime.user.js)
    and install it. If the manager does not offer installation, copy the entire
    file into a new script and save it.
 3. Reload the page, focus a text field, and press **Ctrl+J**.
@@ -136,8 +136,19 @@ for the test matrix.
 
 ## Development
 
-Uses **Vite+ 1.0.0** for development, builds, tests, linting, formatting, and type checks.
-Requires Node.js **22.18+ (22.x), 24.11+ (24.x), or 26+**, and npm.
+The `scala-js-rewrite` branch replaces the entire production TypeScript
+implementation with **Scala 3.3.6 + Scala.js 1.19.0**. The SKK engine uses Scala
+enums and case classes; dictionary entries use Scala collections. Browser
+interop, UI, resource loading, persistence, bookmarks, and every editor adapter
+are also implemented in Scala. There is no embedded or imported copy of the
+old TypeScript runtime.
+
+**Vite+ 1.0.0** remains the JavaScript packaging and editor-fixture toolchain.
+sbt compiles and optimizes Scala.js to an ES module; Vite+ / Rolldown packages
+it as a standalone IIFE with the userscript metadata. Browser users only need
+the generated userscript, with no JVM or Scala runtime installation.
+
+Requires **JDK 17+**, Node.js **22.18+ (22.x), 24.11+ (24.x), or 26+**, and npm.
 
 ```sh
 npm ci
@@ -146,34 +157,45 @@ npm run check
 ```
 
 ```sh
-npx vp check      # Oxfmt + Oxlint + TypeScript checks
-npx vp test run   # Vitest unit tests
-npx vp build      # Standalone userscript with metadata header
-npm run fmt      # Format maintained source and configuration
+npm test                 # Scala.js MUnit tests executed in Node.js
+npm run typecheck        # Scala compiler + Vite+ tool/configuration checks
+npm run build            # Scala.js fullLinkJS + Vite+ userscript packaging
+npm run test:browser     # Built userscript in Chromium and Firefox
+npm run test:editors     # Current editor profiles, including fixture checks
+npm run fmt              # JavaScript/TypeScript toolchain formatting
 ```
 
-Configuration is centralized in `vite.config.ts`. Both the userscript and
-editor fixtures use Vite+ / Rolldown; Playwright drives Chromium and Firefox.
-The npm lockfile pins Vite+ and its bundled tools; no global Vite+ install is needed.
-`npm run check` runs formatting, linting, type checking, engine tests, the userscript build, and
-browser/editor integration tests. Use `npm run build` to regenerate
-`dist/skk-ime.user.js`. Root dev dependencies are only `vite-plus`, `playwright`,
-and `@types/node`, pinned to exact versions. Editor libraries and CodeMirror 5
-types are installed only in their editor profiles; they are absent from the
-root dependency tree. Core build, unit tests, and static checks need no editor
-installation.
+`scripts/scala.mjs` downloads a SHA-256-verified sbt 1.10.7 launcher to the
+ignored `target/tooling/` directory. Scala dependencies come from Maven Central.
+No global sbt or Scala installation is needed. Alternatively, an existing sbt
+installation can run `sbt test fullLinkJS`, followed by `npx vp build`.
+The linked module is generated under `target/userscript/`; the installable
+artifact is `dist/skk-ime.user.js`. Run `npm run build` rather than `vp build`
+alone after editing Scala sources.
+
+`npm run check` runs Vite+ formatting/lint/type checks, Scala.js unit tests,
+the optimized build, and browser/current-editor integration tests. The npm
+lockfile pins Vite+ and fixture tooling; `build.sbt` and `project/` pin Scala,
+Scala.js, sbt, and MUnit. Root npm dependencies remain only Vite+, Playwright,
+and Node.js types. Editor packages remain isolated in their own profiles.
+
+Production code lives under `src/main/scala/skk/`. Browser APIs and
+version-specific page hooks are accessed through the Scala.js interop layer;
+the engine and dictionary APIs are independent of DOM state. MUnit tests live
+under `src/test/scala/skk/`. TypeScript is retained only for Vite+ configuration
+and third-party editor fixtures; Node.js scripts drive builds and Playwright.
 
 ### Editor modules and version matrix
 
-Production adapters live under `src/editors/<editor>/index.ts`. Shared code lives
-in `src/editors/shared/`; ordinary fields in `src/editors/native/`. Monaco and CodeMirror 6 have
+Production adapters live under `src/main/scala/skk/editors/<editor>/`.
+Shared code lives in `editors/shared/`; ordinary fields in `editors/native/`. Monaco and CodeMirror 6 have
 separate ordinary-input and EditContext modules. Quill 1 has a dedicated Delta
 insertion module: its legacy paste handler requires a real browser paste, so
 this module uses the container instance hook used by Quill.find. Quill 2 uses
 clipboard events. No editor library is imported into the production bundle. Tiptap has its own entry point and
 shares ProseMirror insertion. Version-specific implementations are added only
 when tested behavior requires them; adapter selection uses DOM/capabilities.
-`src/editor.ts` manages bookmarks, and `src/component.ts` re-exports registry APIs.
+`Bookmark.scala` manages bookmarks; `editors/Adapter.scala` defines the registry.
 
 Each `test/editors/<editor>/` contains its fixture, `profiles.json`, and independent
 `profiles/<name>/package.json`, `package-lock.json`, and `profile.json` files.
@@ -207,8 +229,8 @@ and browser, including failure screenshots. To add a version, copy a profile,
 change its exact dependencies, regenerate its lockfile with `npm install`, add
 it to `profiles.json` and the workflow matrix, then run the common scenarios.
 
-The conversion engine lives in `src/engine.ts`, browser integration in
-`src/userscript.ts`, and cached dictionary loading in `src/resource.ts`.
+The conversion engine lives in `Engine.scala`, browser integration in
+`Userscript.scala`, and cached dictionary loading in `Resource.scala`.
 
 ## License
 

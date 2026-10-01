@@ -1,21 +1,22 @@
 {
   "name": "skk-userscript",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "private": true,
   "description": "Local SKK Japanese input for Firefox and Chrome userscript managers",
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "build": "vp build",
-    "typecheck": "vp check --no-fmt --no-lint",
-    "test": "vp test run",
+    "build": "node scripts/scala.mjs fullLinkJS && vp build",
+    "typecheck": "node scripts/scala.mjs compile && vp check --no-fmt --no-lint",
+    "test": "node scripts/scala.mjs test",
     "test:browser": "node scripts/browser-test.mjs",
     "test:editors": "vp run typecheck:editors && node scripts/editor-test.mjs",
-    "check": "vp check && vp test run && vp build && vp run test:browser && vp run test:editors",
+    "check": "vp check && node scripts/scala.mjs test fullLinkJS && vp build && vp run test:browser && vp run test:editors",
     "test:editors:matrix": "node scripts/editor-matrix.mjs",
     "lint": "vp check --no-fmt",
     "fmt": "vp fmt",
-    "typecheck:editors": "node scripts/editor-install.mjs && vp lint --config test/editors/oxlint.json --tsconfig test/editors/tsconfig.json test/editors/*/fixture.ts test/editors/codemirror5.d.ts"
+    "typecheck:editors": "node scripts/editor-install.mjs && vp lint --config test/editors/oxlint.json --tsconfig test/editors/tsconfig.json test/editors/*/fixture.ts test/editors/codemirror5.d.ts",
+    "build:scala": "node scripts/scala.mjs fullLinkJS"
   },
   "devDependencies": {
     "@types/node": "24.19.0",

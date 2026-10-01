@@ -1,10 +1,19 @@
-# Validation — v0.3.1, 2026-10-01
+# Validation — Scala.js v0.4.0, 2026-10-02
 
-Strict TypeScript typecheck and all 21 engine/resource unit tests passed.
-The standalone userscript bundle was rebuilt. Ordinary input/contenteditable,
-UI, shadow DOM, registration, persistence and resource integration checks passed
-on Chromium 153.0.8010.0 and Firefox 153.0. The actual upstream EUC-JP
-SKK-JISYO.L also loaded 175,787 combined headings and converted `Nihon` to `日本`.
+The `scala-js-rewrite` branch replaces all production TypeScript with Scala
+3.3.6 / Scala.js 1.19.0. The Scala compiler passed with warnings treated as
+errors. All **23 Scala.js MUnit tests** passed in Node.js, covering the former
+engine/resource tests plus supplementary Unicode deletion and registration
+validation.
+
+The optimized, minified standalone userscript passed the ordinary browser suite
+on Chromium 153.0.8010.0 and Firefox 153.0: compact UI, native and controlled
+inputs, rich-text undo, open shadow DOM, excluded fields, selection, stale
+bookmarks, cancellation, registration, storage, dictionary import and text
+safety. Browser tests also passed with GM grants supplied only as lexical
+wrapper bindings, with the corresponding window properties deleted.
+The actual upstream EUC-JP SKK-JISYO.L loaded **175,787 combined headings**
+and converted `Nihon` to `日本` in both browsers.
 
 ## Isolated editor version profiles
 
@@ -64,17 +73,23 @@ extension installations and manager-controlled resource downloads were not teste
 Browser executables were supplied through environment variables; Firefox sandbox
 flags were adjusted for this container only. No such flags or binaries are shipped.
 
-## Vite+ toolchain
+## Scala.js and Vite+ toolchain
 
-Vite+ 1.0.0 provides Vite / Rolldown builds for the userscript and isolated
-editor fixtures, Vitest for the 21 unit tests, Oxlint for lint and type checking,
-and Oxfmt for maintained sources. `vite.config.ts` holds the shared toolchain
-configuration; the generated kana table and dependency profiles are excluded
-from formatting. Playwright remains the browser automation layer.
+sbt 1.10.7 compiles the Scala application and runs Scala.js MUnit tests in
+Node.js. `fullLinkJS` optimizes the module, and Vite+ 1.0.0 / Rolldown minifies
+and packages it as a standalone userscript. Build configuration is in
+`build.sbt`, `project/` and `vite.config.ts`. Playwright drives all browser
+tests; third-party editor fixture hosts remain TypeScript.
 
-A clean root `npm ci` succeeded with the locked Vite+ toolchain. `vp check`
-passed without format, lint, or type errors or warnings. Monaco fixtures
-use Vite-built editor workers for both versions.
+A clean `npm ci` succeeded. Vite+ formatting/lint/type checks and current
+editor-fixture type checks passed. The checksum-verified sbt launcher bootstrap
+was also tested after removing its cached JAR. Java 17 is required for building,
+and no Java installation is needed in the browser.
+
+The distributed artifact is approximately **371 kB** (**100 kB gzip**), compared
+with the previous readable TypeScript artifact's 54 kB. This includes the
+Scala.js runtime, collections, regex support and application. No editor library
+or full dictionary is embedded. Bundle size remains a tradeoff of this port.
 
 ## Dependency isolation
 

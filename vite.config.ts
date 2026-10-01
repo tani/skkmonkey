@@ -6,18 +6,17 @@ export default defineConfig({
   build: {
     target: ['chrome110', 'firefox115'],
     lib: {
-      entry: fileURLToPath(new URL('./src/userscript.ts', import.meta.url)),
+      entry: fileURLToPath(new URL('./target/userscript/main.js', import.meta.url)),
       name: 'SKKBrowserIME',
       formats: ['iife'],
       fileName: () => 'skk-ime.user.js',
     },
-    minify: false,
+    minify: true,
     sourcemap: false,
     rolldownOptions: { output: { banner } },
   },
-  test: { include: ['test/*.test.ts'], environment: 'node', restoreMocks: true },
   lint: {
-    ignorePatterns: ['dist/**', 'test-results/**', 'test/editors/**'],
+    ignorePatterns: ['dist/**', 'test-results/**', 'test/editors/**', 'target/**', 'project/**'],
     options: { typeAware: true, typeCheck: true },
   },
   fmt: {
@@ -25,7 +24,10 @@ export default defineConfig({
       'dist/**',
       'test-results/**',
       'test/editors/**/profiles/**',
-      'src/kana-table.ts',
+      'target/**',
+      'project/**',
+      'src/**/*.scala',
+      'build.sbt',
     ],
     singleQuote: true,
   },

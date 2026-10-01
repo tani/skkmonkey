@@ -87,7 +87,21 @@ try {
       }, upstreamResource);
       async function load(resource = 'data') {
         await page.goto(url + '?resource=' + resource);
-        await page.addScriptTag({ content: script });
+        const content =
+          resource === 'lexical'
+            ? `(() => {
+                const GM_getResourceURL = window.GM_getResourceURL;
+                const GM_getValue = window.GM_getValue;
+                const GM_setValue = window.GM_setValue;
+                const GM_registerMenuCommand = window.GM_registerMenuCommand;
+                delete window.GM_getResourceURL;
+                delete window.GM_getValue;
+                delete window.GM_setValue;
+                delete window.GM_registerMenuCommand;
+                ${script}
+              })();`
+            : script;
+        await page.addScriptTag({ content });
         await page.waitForFunction(() => Object.keys(window.__menus).length === 3);
       }
       async function reset(selector = '#text', text = '') {
@@ -366,6 +380,19 @@ try {
         assert.ok(count > 100000, count);
         console.log(`${name}: real SKK-JISYO.L EUC-JP resource (${count} entries) passed`);
       }
+      // Userscript managers can pass GM grants as lexical bindings. The
+      // production bundle must not assume they are properties of window.
+      await load('lexical');
+      assert.equal(await page.evaluate(() => 'GM_getValue' in window), false);
+      await reset();
+      await typeKeys('Jisho ');
+      assert.match(await uiText(), /▼辞書/);
+      await page.keyboard.press('Enter');
+      assert.equal(await page.locator('#text').inputValue(), '辞書');
+      await page.evaluate(() => window.__menus['SKK: 辞書設定 / Dictionary settings']());
+      assert.match(await uiText(), /SKK-JISYO.L を使用中/);
+      await page.getByRole('button', { name: '閉じる', exact: true }).click();
+      console.log(`${name}: lexical userscript-manager grants passed`);
       assert.deepEqual(errors, []);
       console.log(
         `${name}: input, candidate/okuri, selection, controlled input, rich-text undo, shadow DOM, excluded fields, cancellation, registration, persistence, dictionary import and text safety passed`,
