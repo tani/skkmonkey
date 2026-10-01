@@ -1,19 +1,40 @@
-import assert from 'node:assert/strict';
-import { readFile, mkdir } from 'node:fs/promises';
+import { runScenarios } from '../test/editors/shared/scenarios.mjs';
+import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 import { chromium, firefox } from 'playwright';
 
-const dir = new URL('../test-results/editors/', import.meta.url);
+const profilePath = process.env.SKK_EDITOR_PROFILE;
+const profile = profilePath ? JSON.parse(await readFile(new URL(profilePath, new URL('../', import.meta.url)), 'utf8')) : null;
+const profileDir = profilePath ? fileURLToPath(new URL('.', new URL(profilePath, new URL('../', import.meta.url)))) : null;
+const label = profile ? `${profile.editor}/${profile.name}` : 'baseline';
+const ids = profile?.fixtures ?? ['monaco','monaco-native','cm5','cm6','pm','tiptap','quill'];
+const dir = new URL(`../test-results/editors/${label}/`, import.meta.url);
 await mkdir(dir, { recursive: true });
-await build({ entryPoints: [new URL('../test/editors/fixture.ts', import.meta.url).pathname],
+const entry = profile ? new URL('entry.ts', dir).pathname : new URL('../test/editors/fixture.ts', import.meta.url).pathname;
+if (profile) await writeFile(entry, `import ${JSON.stringify(new URL(`../test/editors/${profile.editor}/fixture.ts`, import.meta.url).pathname)};\nimport { expose } from ${JSON.stringify(new URL('../test/editors/shared/fixture.ts', import.meta.url).pathname)};\nexpose();`);
+await build({ entryPoints: [entry],
   outfile: new URL('fixture.js', dir).pathname, bundle: true, platform: 'browser', format: 'iife',
+  define: { SKK_PROFILE_NATIVE: String(profile?.nativeEditContext ?? true) },
+  plugins: profileDir ? [{ name: 'isolated-editor-dependencies', setup(build) {
+    // Only direct fixture imports are redirected. Transitive imports resolve
+    // inside this profile's node_modules, never the root dependency tree.
+    build.onResolve({ filter: /^[^./]/ }, args => {
+      if (args.importer.includes('/node_modules/') || !args.importer.startsWith(fileURLToPath(new URL('../test/editors/', import.meta.url)))) return;
+      return build.resolve(args.path, { kind: args.kind, resolveDir: profileDir }).then(result => {
+        if (!result.errors.length && !result.path.startsWith(resolve(profileDir, 'node_modules') + '/')) throw new Error(`Dependency escaped isolated profile: ${args.path}`);
+        return result;
+      });
+    });
+  } }] : [],
   loader: { '.ttf': 'file' }, target: ['chrome110', 'firefox115'], logLevel: 'warning' });
 const script = await readFile(new URL('../dist/skk-ime.user.js', import.meta.url), 'utf8');
 const html = `<!doctype html><html lang="ja"><meta charset="utf-8"><title>Real editor fixtures</title>
 <link rel="stylesheet" href="/fixture.css"><style>body{font:16px system-ui;margin:20px}section{margin:18px 0}section>div{height:170px;border:1px solid #aaa}.CodeMirror{height:170px}.cm-editor{height:170px}.ProseMirror{min-height:140px;padding:8px}.ql-container{height:170px}.cm-content{font-size:16px}</style>
-${['monaco','monaco-native','cm5','cm6','pm','tiptap','quill'].map(id => `<section><h2>${id}</h2><div id="${id}"></div></section>`).join('')}
+${ids.map(id => `<section><h2>${id}</h2><div id="${id}"></div></section>`).join('')}
 <script src="/fixture.js"></script></html>`;
 const server = createServer(async (req, res) => {
   try {
@@ -32,8 +53,9 @@ try {
     if (process.env.SKK_TEST_BROWSERS && !process.env.SKK_TEST_BROWSERS.split(',').includes(name)) continue;
     const executablePath = process.env[`SKK_TEST_${name.toUpperCase()}_PATH`];
     const browser = await type.launch({ headless: true, timeout: 15000, ...(executablePath ? { executablePath } : {}) });
+    let page;
     try {
-      const page = await browser.newPage({ viewport: { width: 1000, height: 900 } }); page.setDefaultTimeout(10000);
+      page = await browser.newPage({ viewport: { width: 1000, height: 900 } }); page.setDefaultTimeout(10000);
       const errors = []; page.on('pageerror', error => errors.push(String(error)));
       await page.addInitScript(() => {
         const store = new Map();
@@ -54,7 +76,7 @@ try {
         for (const type of ['keydown', 'paste', 'input', 'focusout']) document.addEventListener(type, e => {
           const target = e.target;
           window.debugEvents.push({ type, key: e.key, data: e.clipboardData?.getData('text/plain') ?? e.data,
-            value: target?.value, model: window.fixture['monaco-native']?.get() ?? window.fixture.monaco.get(), target: target?.className,
+            value: target?.value, model: window.fixture['monaco-native']?.get() ?? window.fixture.monaco?.get(), target: target?.className,
             context: target?.editContext ? [target.editContext.text, target.editContext.selectionStart, target.editContext.selectionEnd] : undefined });
         }, true);
         const context = document.querySelector('#monaco-native .native-edit-context')?.editContext;
@@ -62,73 +84,12 @@ try {
           text: e.text, from: e.updateRangeStart, to: e.updateRangeEnd, selection: e.selectionStart, model: window.fixture['monaco-native'].get(), context: [context.text, context.selectionStart] }));
       });
       await page.addScriptTag({ content: script }); await page.waitForFunction(() => window.skkUI);
-      const names = await page.evaluate(() => Object.keys(window.fixture));
-      async function model(id) { return page.evaluate(id => window.fixture[id].get(), id); }
-      async function expectModel(id, text) {
-        try { await page.waitForFunction(([id, text]) => window.fixture[id].get() === text, [id, text]); }
-        catch (error) {
-          console.log('DEBUG', await page.evaluate(id => ({ model: window.fixture[id].get(), active: document.activeElement?.outerHTML,
-            preedit: window.skkUI?.querySelector('.preedit')?.textContent, note: window.skkUI?.querySelector('.note')?.textContent,
-            events: window.debugEvents.slice(-15) }), id));
-          throw error;
-        }
-      }
-      async function reset(id, text = '') {
-        await page.keyboard.press('Escape'); await page.keyboard.press('Escape');
-        await page.evaluate(([id, text]) => { window.fixture[id].set(text); window.fixture[id].focus(); }, [id, text]);
-        await page.keyboard.press('Control+j');
-        // Allow the editor to update its hidden input / native EditContext.
-        await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-      }
-      for (const id of names) {
-        console.log(`${name}/${id}: starting`);
-        await reset(id); await page.keyboard.type("kon'nichiha"); await expectModel(id, 'こんにちは');
-        if (id === 'monaco-native') {
-          await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-          assert.equal(await page.evaluate(() => document.activeElement.editContext.text), 'こんにちは');
-        }
-        await reset(id); await page.keyboard.type('lABC'); await expectModel(id, 'ABC');
-        await page.keyboard.press('Control+j'); await page.keyboard.type('kana'); await expectModel(id, 'ABCかな');
-        await reset(id); await page.keyboard.type('Kanji'); assert.equal(await model(id), '');
-        await page.keyboard.press('Space');
-        const first = await page.evaluate(() => window.skkUI.querySelector('.preedit').textContent.slice(1));
-        await page.keyboard.press('Space'); await page.keyboard.press('x'); await page.keyboard.press('Enter'); await expectModel(id, first);
-        await reset(id); await page.keyboard.type('KaKu'); await page.keyboard.press('Enter'); await expectModel(id, '書く');
-        await reset(id, 'alpha OLD omega');
-        await page.evaluate(id => window.fixture[id].select(6, 9), id);
-        await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-        await page.keyboard.type('Nihon '); await page.keyboard.press('Enter'); await expectModel(id, 'alpha 日本 omega');
-        await page.keyboard.press('Control+z'); await expectModel(id, 'alpha OLD omega');
-        await page.keyboard.press(id === 'quill' ? 'Control+Shift+z' : 'Control+y'); await expectModel(id, 'alpha 日本 omega');
-        await reset(id); await page.keyboard.type('Nihon '); await page.keyboard.press('Escape'); await page.keyboard.press('Escape'); await expectModel(id, '');
-        await reset(id); await page.keyboard.type('Nihon ');
-        await page.getByRole('button', { name: /^1\. 日本$/ }).click(); await expectModel(id, '日本');
-        await reset(id, 'prefix:'); await page.keyboard.type('/fixture-' + id + ' ');
-        await page.getByRole('textbox', { name: '登録する単語' }).fill('登録');
-        await page.getByRole('button', { name: '登録', exact: true }).click(); await expectModel(id, 'prefix:登録');
-        await reset(id); await page.keyboard.type('kana'); await page.keyboard.press('ArrowLeft'); await page.keyboard.type('a'); await expectModel(id, 'かあな');
-        await reset(id); await page.keyboard.type('a'); await page.keyboard.press('Backspace'); await expectModel(id, '');
-        await reset(id); await page.keyboard.type('Nihon');
-        await page.evaluate(id => window.fixture[id].set('external'), id);
-        await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-        await page.keyboard.type('a'); await expectModel(id, 'externalあ');
-        await reset(id, 'locked'); await page.evaluate(id => window.fixture[id].readonly(true), id);
-        await page.keyboard.type('kana'); assert.equal(await model(id), 'locked');
-        await page.evaluate(id => window.fixture[id].readonly(false), id);
-        console.log(`${name}/${id}: kana, candidates, okuri, selected replacement, undo/redo, cancel, candidate click, cursor, delete, stale edit, read-only passed`);
-      }
-      // Rich-text marks are preserved in the model, not merely in rendered DOM.
-      await reset('pm'); await page.evaluate(() => { window.fixture.pm.marked(); window.fixture.pm.focus(); });
-      await page.keyboard.type('Nihon '); await page.keyboard.press('Enter'); await expectModel('pm', 'bold日本');
-      assert.match(await page.evaluate(() => window.fixture.pm.html()), /<strong>bold日本<\/strong>/);
-      for (const id of ['monaco', ...(names.includes('monaco-native') ? ['monaco-native'] : []), 'cm5', 'cm6']) {
-        await reset(id, 'x\ny'); await page.evaluate(id => window.fixture[id].multi(), id);
-        await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-        await page.keyboard.type('Nihon '); await page.keyboard.press('Enter'); await expectModel(id, '日本x\n日本y');
-      }
-      assert.deepEqual(errors, []);
+      await runScenarios(page, `${label}/${name}`, errors);
       await page.screenshot({ path: new URL(`${name}.png`, dir).pathname, fullPage: true });
-      console.log(`${name}: all real editor integration checks passed`);
+      console.log(`${label}/${name}: all real editor integration checks passed`);
+    } catch (error) {
+      if (page) await page.screenshot({ path: new URL(`${name}-failure.png`, dir).pathname, fullPage: true }).catch(() => {});
+      throw error;
     } finally { await browser.close(); }
   }
 } finally { server.close(); }

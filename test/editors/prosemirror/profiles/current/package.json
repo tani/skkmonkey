@@ -1,0 +1,14 @@
+{
+  "name": "skk-test-prosemirror-current",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "prosemirror-state": "1.4.4",
+    "prosemirror-view": "1.42.6",
+    "prosemirror-model": "1.25.12",
+    "prosemirror-schema-basic": "1.2.5",
+    "prosemirror-history": "1.5.1",
+    "prosemirror-commands": "1.7.2",
+    "prosemirror-keymap": "1.2.3"
+  }
+}

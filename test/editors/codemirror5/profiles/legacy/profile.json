@@ -1,0 +1,8 @@
+{
+  "editor": "codemirror5",
+  "name": "legacy",
+  "nativeEditContext": false,
+  "fixtures": [
+    "cm5"
+  ]
+}

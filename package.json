@@ -1,6 +1,6 @@
 {
   "name": "skk-userscript",
-  "version": "0.2.4",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "Local SKK Japanese input for Firefox and Chrome userscript managers",
@@ -14,7 +14,8 @@
     "test": "node --experimental-strip-types --test test/*.test.ts",
     "test:browser": "node scripts/browser-test.mjs",
     "test:editors": "node scripts/editor-test.mjs",
-    "check": "npm run typecheck && npm test && npm run build && npm run test:browser && npm run test:editors"
+    "check": "npm run typecheck && npm test && npm run build && npm run test:browser && npm run test:editors",
+    "test:editors:matrix": "node scripts/editor-matrix.mjs"
   },
   "devDependencies": {
     "@codemirror/commands": "^6.11.1",

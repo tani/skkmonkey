@@ -1,0 +1,8 @@
+{
+  "editor": "prosemirror",
+  "name": "current",
+  "nativeEditContext": false,
+  "fixtures": [
+    "pm"
+  ]
+}

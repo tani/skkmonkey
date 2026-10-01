@@ -1,0 +1,8 @@
+{
+  "name": "skk-test-quill-current",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "quill": "2.0.3"
+  }
+}

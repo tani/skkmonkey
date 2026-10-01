@@ -1,26 +1,9 @@
-import { componentFor, componentSnapshot, nativeContext, pasteIntoComponent, typeIntoEditContext } from './component.ts';
-
-export type Editor = HTMLInputElement | HTMLTextAreaElement | HTMLElement;
-
-export function findEditor(path: EventTarget[]): Editor | null {
-  if (path.some(item => item instanceof HTMLElement && item.matches('[data-skk-disable]'))) return null;
-  for (const item of path) {
-    if (!(item instanceof HTMLElement)) continue;
-    if (item.closest('[data-skk-disable]')) return null;
-    if (componentFor(item)?.kind === 'monaco' && item.getAttribute('aria-autocomplete') === 'none') return null;
-    if (item instanceof HTMLTextAreaElement) return item.disabled || item.readOnly ? null : item;
-    if (item instanceof HTMLInputElement) return (
-      ['text', 'search'].includes(item.type) && !item.disabled && !item.readOnly ? item : null);
-    if (item.closest('[contenteditable="false"]')) return null;
-    if (nativeContext(item) && componentFor(item)?.kind === 'monaco') return item;
-    if (item.isContentEditable) {
-      let root = item;
-      while (root.parentElement?.isContentEditable) root = root.parentElement;
-      return root;
-    }
-  }
-  return null;
-}
+import { componentFor, componentSnapshot, nativeContext } from './component.ts';
+import { insertInput } from './editors/native/input.ts';
+import { insertContenteditable } from './editors/native/contenteditable.ts';
+import type { Editor } from './editors/types.ts';
+export type { Editor } from './editors/types.ts';
+export { findEditor } from './editors/native/index.ts';
 
 function selectionFor(editor: Editor): Selection | null {
   const root = editor.getRootNode() as Document | (ShadowRoot & { getSelection?: () => Selection | null });
@@ -102,28 +85,8 @@ export class Bookmark {
       cancelable: true, inputType: 'insertText', data: text });
     if (!editor.dispatchEvent(before) || !this.valid()) return false;
     const component = componentFor(editor);
-    if (component?.kind === 'monaco' && nativeContext(editor)) return typeIntoEditContext(editor, text);
-    if (component && component.kind !== 'monaco') return pasteIntoComponent(editor, text);
-    if (editor instanceof HTMLInputElement || editor instanceof HTMLTextAreaElement) {
-      const next = this.value.slice(0, this.start) + text + this.value.slice(this.end);
-      // Use the native setter so controlled frameworks notice the input event.
-      const proto = editor instanceof HTMLInputElement ? HTMLInputElement.prototype : HTMLTextAreaElement.prototype;
-      Object.getOwnPropertyDescriptor(proto, 'value')!.set!.call(editor, next);
-      editor.setSelectionRange(this.start + text.length, this.start + text.length);
-      editor.dispatchEvent(new InputEvent('input', { bubbles: true, composed: true, inputType: 'insertText', data: text }));
-      return true;
-    }
-    const selection = selectionFor(editor);
-    selection?.removeAllRanges(); selection?.addRange(this.range!);
-    // Chromium and Firefox retain contenteditable undo history with insertText.
-    // No HTML is inserted, even if a dictionary candidate contains markup.
-    if (document.execCommand('insertText', false, text)) return true;
-    const range = this.range!;
-    range.deleteContents();
-    const node = document.createTextNode(text);
-    range.insertNode(node); range.setStartAfter(node); range.collapse(true);
-    selection?.removeAllRanges(); selection?.addRange(range);
-    editor.dispatchEvent(new InputEvent('input', { bubbles: true, composed: true, inputType: 'insertText', data: text }));
-    return true;
+    if (component) return component.adapter.insert(editor, text);
+    if (editor instanceof HTMLInputElement || editor instanceof HTMLTextAreaElement) return insertInput(editor, text);
+    return insertContenteditable(editor, text, this.range!, selectionFor(editor));
   }
 }

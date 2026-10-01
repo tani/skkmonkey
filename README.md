@@ -87,16 +87,23 @@ Text/search inputs, textareas, ordinary `contenteditable`, and fields inside
 open Shadow DOM are supported. Password, disabled, and read-only fields are
 excluded. Add `data-skk-disable` to an element or ancestor to opt out.
 
-Real component fixtures are tested in Chromium and Firefox:
+Real component fixtures run the same scenarios on independently installed,
+lockfile-pinned dependency profiles in Chromium and Firefox:
 
-| Editor | Tested configuration |
-| --- | --- |
-| Monaco 0.57.0 | Textarea; native EditContext on Chromium |
-| CodeMirror 5.65.21 | Textarea input style |
-| CodeMirror 6 | View 6.43.13 / state 6.7.6 |
-| ProseMirror | View 1.42.6 / state 1.4.4 |
-| Tiptap 3.31.4 | StarterKit |
-| Quill 2.0.3 | Clipboard module and user-only history |
+| Editor | Legacy profile | Current profile |
+| --- | --- | --- |
+| Monaco | 0.44.0 | 0.57.0 |
+| CodeMirror 5 | 5.58.3 | 5.65.21 |
+| CodeMirror 6 | 6.28.6 | 6.43.13 |
+| ProseMirror | 1.33.8 | 1.42.6 |
+| Tiptap | 2.11.5 | 3.31.4 |
+| Quill | 1.3.7 | 2.0.3 |
+
+`current` is a fixed tested baseline, not an automatically moving latest version.
+Profile manifests include the full dependency set for modular editors. Both
+Monaco input modes are tested on the current profile when native EditContext is
+available; the older profile uses its textarea input. These are tested points,
+not a guarantee for every intervening release or custom configuration.
 
 Component adapters update the editor model and undo history. Custom keymaps,
 paste filters, collaboration, Monaco diff editors, and CodeMirror 5
@@ -124,9 +131,46 @@ npm run check
 browser/editor integration tests. Use `npm run build` to regenerate
 `dist/skk-ime.user.js`. Editor libraries are test dependencies only.
 
-The conversion engine lives in `src/engine.ts`, editor adapters in
-`src/editor.ts` and `src/component.ts`, and browser integration in
-`src/userscript.ts`; cached dictionary loading lives in `src/resource.ts`.
+### Editor modules and version matrix
+
+Production adapters live under `src/editors/<editor>/index.ts`. Shared code lives
+in `src/editors/shared/`; ordinary fields in `src/editors/native/`. Monaco and CodeMirror 6 have
+separate ordinary-input and EditContext modules. Quill 1 has a dedicated Delta
+insertion module: its legacy paste handler requires a real browser paste, so
+this module uses the container instance hook used by Quill.find. Quill 2 uses
+clipboard events. No editor library is imported into the production bundle. Tiptap has its own entry point and
+shares ProseMirror insertion. Version-specific implementations are added only
+when tested behavior requires them; adapter selection uses DOM/capabilities.
+`src/editor.ts` manages bookmarks, and `src/component.ts` re-exports registry APIs.
+
+Each `test/editors/<editor>/` contains its fixture, `profiles.json`, and independent
+`profiles/<name>/package.json`, `package-lock.json`, and `profile.json` files.
+`test/editors/shared/scenarios.mjs` runs identical model/history/input assertions
+on every profile. Profile builds resolve fixture dependencies only inside that
+profile's node_modules, failing if a dependency would fall back to the root tree.
+
+```sh
+# List profiles; install their locked dependencies and run every profile.
+npm run test:editors:matrix -- --list
+npm run test:editors:matrix -- --install
+
+# Run selected profiles, optionally on one browser.
+SKK_TEST_BROWSERS=firefox npm run test:editors:matrix -- --install quill/legacy tiptap/current
+
+# Reuse already installed profiles.
+npm run test:editors:matrix -- monaco/legacy
+```
+
+`npm run test:editors` retains the fast combined baseline fixture.
+GitHub Actions checks all profiles on both browsers for pushes, pull requests and
+manual runs, with four jobs at a time. Reports are written to
+`test-results/editor-matrix.json`; screenshots are separated by editor/profile
+and browser, including failure screenshots. To add a version, copy a profile,
+change its exact dependencies, regenerate its lockfile with `npm install`, add
+it to `profiles.json` and the workflow matrix, then run the common scenarios.
+
+The conversion engine lives in `src/engine.ts`, browser integration in
+`src/userscript.ts`, and cached dictionary loading in `src/resource.ts`.
 
 ## License
 

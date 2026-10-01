@@ -1,0 +1,9 @@
+{
+  "editor": "monaco",
+  "name": "current",
+  "nativeEditContext": true,
+  "fixtures": [
+    "monaco",
+    "monaco-native"
+  ]
+}

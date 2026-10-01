@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SKK Browser IME
 // @namespace    cc.tani.skk-userscript
-// @version      0.2.4
+// @version      0.3.0
 // @description  Local SKK Japanese input; TypeScript, skkeleton kana rules, local dictionaries
 // @match        https://*/*
 // @match        http://*/*
@@ -2127,53 +2127,13 @@ freely, subject to the following restrictions:
     }
   };
 
-  // src/component.ts
-  function componentFor(element) {
-    const selectors = [
-      ["monaco", ".monaco-editor"],
-      ["codemirror5", ".CodeMirror"],
-      ["codemirror6", ".cm-editor"],
-      ["prosemirror", ".ProseMirror"],
-      ["quill", ".ql-container"]
-    ];
-    for (const [kind, selector] of selectors) {
-      const root = element.closest(selector);
-      if (!root) continue;
-      if (kind === "monaco" && !element.matches("textarea.inputarea, .native-edit-context")) continue;
-      if (kind === "codemirror5" && !(element.matches("textarea") && !element.closest(".CodeMirror-dialog")) && !element.closest(".CodeMirror-code")) continue;
-      if (kind === "codemirror6" && !element.closest(".cm-content")) continue;
-      if (kind === "quill" && !element.closest(".ql-editor")) continue;
-      return { kind, root };
-    }
-    return null;
-  }
+  // src/editors/shared/edit-context.ts
   function nativeContext(element) {
     const context = element.editContext;
     return context && typeof context.text === "string" ? context : null;
   }
-  function componentSnapshot(element) {
-    const component = componentFor(element);
-    if (!component) return "";
-    const selectors = {
-      monaco: ".view-lines",
-      codemirror5: ".CodeMirror-code",
-      codemirror6: ".cm-content",
-      prosemirror: ".ProseMirror",
-      quill: ".ql-editor"
-    };
-    const surface = component.root.matches(selectors[component.kind]) ? component.root : component.root.querySelector(selectors[component.kind]);
-    const carets = component.kind === "monaco" ? Array.from(component.root.querySelectorAll(".cursor, .selected-text")).map((node) => `${node.style.top}:${node.style.left}:${node.style.width}:${node.style.height}`).join("|") : "";
-    return (surface?.textContent ?? "") + "\0" + carets;
-  }
-  function pasteIntoComponent(element, text) {
-    element.ownerDocument.dispatchEvent(new Event("selectionchange"));
-    const data = new DataTransfer();
-    data.setData("text/plain", text);
-    const paste = new ClipboardEvent("paste", { bubbles: true, composed: true, cancelable: true });
-    Object.defineProperty(paste, "clipboardData", { value: data });
-    element.dispatchEvent(paste);
-    return paste.defaultPrevented;
-  }
+
+  // src/editors/monaco/edit-context.ts
   function typeIntoEditContext(element, text) {
     const context = nativeContext(element);
     if (!context) return false;
@@ -2206,7 +2166,183 @@ freely, subject to the following restrictions:
     return true;
   }
 
-  // src/editor.ts
+  // src/editors/native/input.ts
+  function insertInput(editor, text) {
+    const start = editor.selectionStart ?? 0;
+    const end = editor.selectionEnd ?? start;
+    const next = editor.value.slice(0, start) + text + editor.value.slice(end);
+    const proto = editor instanceof HTMLInputElement ? HTMLInputElement.prototype : HTMLTextAreaElement.prototype;
+    Object.getOwnPropertyDescriptor(proto, "value").set.call(editor, next);
+    editor.setSelectionRange(start + text.length, start + text.length);
+    editor.dispatchEvent(new InputEvent("input", { bubbles: true, composed: true, inputType: "insertText", data: text }));
+    return true;
+  }
+
+  // src/editors/monaco/textarea.ts
+  function insertTextarea(element, text) {
+    return element instanceof HTMLTextAreaElement && insertInput(element, text);
+  }
+
+  // src/editors/monaco/index.ts
+  var adapter = {
+    kind: "monaco",
+    detect(element) {
+      return element.matches("textarea.inputarea, .native-edit-context") ? element.closest(".monaco-editor") : null;
+    },
+    snapshot(root) {
+      const carets = Array.from(root.querySelectorAll(".cursor, .selected-text")).map((node) => `${node.style.top}:${node.style.left}:${node.style.width}:${node.style.height}`).join("|");
+      return (root.querySelector(".view-lines")?.textContent ?? "") + "\0" + carets;
+    },
+    insert: (element, text) => nativeContext(element) ? typeIntoEditContext(element, text) : insertTextarea(element, text)
+  };
+
+  // src/editors/shared/clipboard.ts
+  function pasteIntoComponent(element, text) {
+    element.ownerDocument.dispatchEvent(new Event("selectionchange"));
+    const data = new DataTransfer();
+    data.setData("text/plain", text);
+    const paste = new ClipboardEvent("paste", { bubbles: true, composed: true, cancelable: true });
+    Object.defineProperty(paste, "clipboardData", { value: data });
+    element.dispatchEvent(paste);
+    return paste.defaultPrevented;
+  }
+
+  // src/editors/codemirror5/index.ts
+  var adapter2 = {
+    kind: "codemirror5",
+    detect(element) {
+      if (!(element.matches("textarea") && !element.closest(".CodeMirror-dialog")) && !element.closest(".CodeMirror-code")) return null;
+      return element.closest(".CodeMirror");
+    },
+    snapshot(root) {
+      const surface = root.matches(".CodeMirror-code") ? root : root.querySelector(".CodeMirror-code");
+      return (surface?.textContent ?? "") + "\0";
+    },
+    insert: pasteIntoComponent
+  };
+
+  // src/editors/codemirror6/edit-context.ts
+  function insertEditContext(element, text) {
+    const context = nativeContext(element);
+    if (!context) return false;
+    const start = context.selectionStart, end = context.selectionEnd;
+    context.dispatchEvent(new Event("compositionstart"));
+    try {
+      context.updateText(start, end, text);
+      context.updateSelection(start + text.length, start + text.length);
+      const event = new Event("textupdate");
+      Object.defineProperties(event, {
+        text: { value: text },
+        updateRangeStart: { value: start },
+        updateRangeEnd: { value: end },
+        selectionStart: { value: start + text.length },
+        selectionEnd: { value: start + text.length }
+      });
+      context.dispatchEvent(event);
+    } finally {
+      context.dispatchEvent(new Event("compositionend"));
+    }
+    return true;
+  }
+
+  // src/editors/codemirror6/index.ts
+  var adapter3 = {
+    kind: "codemirror6",
+    detect(element) {
+      if (!element.closest(".cm-content")) return null;
+      return element.closest(".cm-editor");
+    },
+    snapshot(root) {
+      const surface = root.matches(".cm-content") ? root : root.querySelector(".cm-content");
+      return (surface?.textContent ?? "") + "\0";
+    },
+    insert: (element, text) => nativeContext(element) ? insertEditContext(element, text) : pasteIntoComponent(element, text)
+  };
+
+  // src/editors/prosemirror/index.ts
+  var adapter4 = {
+    kind: "prosemirror",
+    detect(element) {
+      return element.closest(".ProseMirror");
+    },
+    snapshot(root) {
+      const surface = root.matches(".ProseMirror") ? root : root.querySelector(".ProseMirror");
+      return (surface?.textContent ?? "") + "\0";
+    },
+    insert: pasteIntoComponent
+  };
+
+  // src/editors/tiptap/index.ts
+  var adapter5 = {
+    ...adapter4,
+    kind: "tiptap",
+    detect: (element) => element.closest(".tiptap.ProseMirror")
+  };
+
+  // src/editors/quill/v1.ts
+  function legacyInstance(element) {
+    const root = element.closest(".ql-container");
+    const instance = root?.__quill;
+    return instance?.root === element && typeof instance.updateContents === "function" && typeof instance.getContents === "function" && typeof instance.history?.cutoff === "function" ? instance : null;
+  }
+  function insertLegacy(element, text) {
+    const quill = legacyInstance(element);
+    if (!quill?.isEnabled()) return false;
+    const range = quill.getSelection();
+    if (!range) return false;
+    quill.history.cutoff();
+    const delta = quill.getContents(0, 0).retain(range.index).delete(range.length).insert(text, quill.getFormat(range.index));
+    quill.updateContents(delta, "user");
+    quill.setSelection(range.index + text.length, 0, "silent");
+    quill.history.cutoff();
+    return true;
+  }
+
+  // src/editors/quill/index.ts
+  var adapter6 = {
+    kind: "quill",
+    detect(element) {
+      if (!element.closest(".ql-editor")) return null;
+      return element.closest(".ql-container");
+    },
+    snapshot(root) {
+      const surface = root.matches(".ql-editor") ? root : root.querySelector(".ql-editor");
+      return (surface?.textContent ?? "") + "\0";
+    },
+    insert: (element, text) => legacyInstance(element) ? insertLegacy(element, text) : pasteIntoComponent(element, text)
+  };
+
+  // src/editors/registry.ts
+  var adapters = [adapter, adapter2, adapter3, adapter5, adapter4, adapter6];
+  function componentFor(element) {
+    for (const adapter7 of adapters) {
+      const root = adapter7.detect(element);
+      if (root) return { kind: adapter7.kind, root, adapter: adapter7 };
+    }
+    return null;
+  }
+  function componentSnapshot(element) {
+    const component = componentFor(element);
+    return component ? component.adapter.snapshot(component.root) : "";
+  }
+
+  // src/editors/native/contenteditable.ts
+  function insertContenteditable(editor, text, range, selection) {
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    if (document.execCommand("insertText", false, text)) return true;
+    range.deleteContents();
+    const node = document.createTextNode(text);
+    range.insertNode(node);
+    range.setStartAfter(node);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    editor.dispatchEvent(new InputEvent("input", { bubbles: true, composed: true, inputType: "insertText", data: text }));
+    return true;
+  }
+
+  // src/editors/native/index.ts
   function findEditor(path) {
     if (path.some((item) => item instanceof HTMLElement && item.matches("[data-skk-disable]"))) return null;
     for (const item of path) {
@@ -2225,6 +2361,8 @@ freely, subject to the following restrictions:
     }
     return null;
   }
+
+  // src/editor.ts
   function selectionFor(editor) {
     const root = editor.getRootNode();
     return "getSelection" in root && root.getSelection ? root.getSelection() : document.getSelection();
@@ -2311,30 +2449,9 @@ freely, subject to the following restrictions:
       });
       if (!editor.dispatchEvent(before) || !this.valid()) return false;
       const component = componentFor(editor);
-      if (component?.kind === "monaco" && nativeContext(editor)) return typeIntoEditContext(editor, text);
-      if (component && component.kind !== "monaco") return pasteIntoComponent(editor, text);
-      if (editor instanceof HTMLInputElement || editor instanceof HTMLTextAreaElement) {
-        const next = this.value.slice(0, this.start) + text + this.value.slice(this.end);
-        const proto = editor instanceof HTMLInputElement ? HTMLInputElement.prototype : HTMLTextAreaElement.prototype;
-        Object.getOwnPropertyDescriptor(proto, "value").set.call(editor, next);
-        editor.setSelectionRange(this.start + text.length, this.start + text.length);
-        editor.dispatchEvent(new InputEvent("input", { bubbles: true, composed: true, inputType: "insertText", data: text }));
-        return true;
-      }
-      const selection = selectionFor(editor);
-      selection?.removeAllRanges();
-      selection?.addRange(this.range);
-      if (document.execCommand("insertText", false, text)) return true;
-      const range = this.range;
-      range.deleteContents();
-      const node = document.createTextNode(text);
-      range.insertNode(node);
-      range.setStartAfter(node);
-      range.collapse(true);
-      selection?.removeAllRanges();
-      selection?.addRange(range);
-      editor.dispatchEvent(new InputEvent("input", { bubbles: true, composed: true, inputType: "insertText", data: text }));
-      return true;
+      if (component) return component.adapter.insert(editor, text);
+      if (editor instanceof HTMLInputElement || editor instanceof HTMLTextAreaElement) return insertInput(editor, text);
+      return insertContenteditable(editor, text, this.range, selectionFor(editor));
     }
   };
 

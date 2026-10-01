@@ -1,0 +1,10 @@
+{
+  "name": "skk-test-codemirror6-current",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@codemirror/view": "6.43.13",
+    "@codemirror/state": "6.7.6",
+    "@codemirror/commands": "6.11.1"
+  }
+}

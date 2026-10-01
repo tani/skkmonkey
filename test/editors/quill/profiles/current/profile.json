@@ -1,0 +1,8 @@
+{
+  "editor": "quill",
+  "name": "current",
+  "nativeEditContext": false,
+  "fixtures": [
+    "quill"
+  ]
+}

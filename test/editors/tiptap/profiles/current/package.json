@@ -1,0 +1,10 @@
+{
+  "name": "skk-test-tiptap-current",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@tiptap/core": "3.31.4",
+    "@tiptap/starter-kit": "3.31.4",
+    "prosemirror-state": "1.4.4"
+  }
+}

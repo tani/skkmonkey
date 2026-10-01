@@ -1,0 +1,8 @@
+{
+  "name": "skk-test-monaco-current",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "monaco-editor": "0.57.0"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "editor": "quill",
+  "name": "legacy",
+  "nativeEditContext": false,
+  "fixtures": [
+    "quill"
+  ]
+}

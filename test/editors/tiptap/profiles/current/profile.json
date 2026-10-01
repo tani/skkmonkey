@@ -1,0 +1,8 @@
+{
+  "editor": "tiptap",
+  "name": "current",
+  "nativeEditContext": false,
+  "fixtures": [
+    "tiptap"
+  ]
+}

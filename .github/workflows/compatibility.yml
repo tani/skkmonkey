@@ -1,0 +1,65 @@
+name: Editor compatibility
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck && npm test && npm run build
+      - run: npx playwright install --with-deps chromium firefox
+      - run: npm run test:browser
+  editors:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        profile:
+          - codemirror5/current
+          - codemirror5/legacy
+          - codemirror6/current
+          - codemirror6/legacy
+          - monaco/current
+          - monaco/legacy
+          - prosemirror/current
+          - prosemirror/legacy
+          - quill/current
+          - quill/legacy
+          - tiptap/current
+          - tiptap/legacy
+        browser: [chromium, firefox]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            test/editors/**/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: npx playwright install --with-deps ${{ matrix.browser }}
+      - run: npm run test:editors:matrix -- --install ${{ matrix.profile }}
+        env:
+          SKK_TEST_BROWSERS: ${{ matrix.browser }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: compatibility-${{ strategy.job-index }}
+          path: |
+            test-results/editor-matrix.json
+            test-results/editors/**/*.png
+          if-no-files-found: ignore

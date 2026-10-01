@@ -1,0 +1,8 @@
+{
+  "name": "skk-test-codemirror5-current",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "codemirror5": "npm:codemirror@5.65.21"
+  }
+}

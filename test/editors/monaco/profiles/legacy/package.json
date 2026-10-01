@@ -1,0 +1,8 @@
+{
+  "name": "skk-test-monaco-legacy",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "monaco-editor": "0.44.0"
+  }
+}
