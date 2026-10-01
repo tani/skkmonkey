@@ -23,6 +23,23 @@ The script runs on HTTP/HTTPS pages. Restrict its `@match` rules in your manager
 if desired. It requires page execution context; keep `@sandbox raw` and
 `@inject-into page`. Browser-internal pages cannot run it.
 
+## Usage examples
+
+**Kanji conversion:** press **Ctrl+J**, type `Nihon`, then press **Space**.
+The compact panel shows `日本` and alternative candidates. Press **Enter** to
+insert the selected candidate into the text field.
+
+![Kanji conversion: 日本 selected in the compact SKK candidate panel](docs/images/kanji-conversion.png)
+
+**Okuri conversion:** type `Nikki`, **Space**, **Enter**, then `wo` and `KaKu`.
+The field contains `日記を`, and `KaKu` automatically opens candidates such as
+`書く`. Press **Enter** to finish `日記を書く`.
+
+![Okuri conversion: 書く selected after 日記を](docs/images/okuri-conversion.png)
+
+Screenshots use the built userscript and SKK-JISYO.L in a sample textarea in
+Chromium, with userscript-manager APIs supplied by the browser fixture.
+
 ## Basic keys
 
 | Key                      | Action                                                 |
