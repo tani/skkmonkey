@@ -1,0 +1,40 @@
+{
+  "name": "skk-userscript",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Local SKK Japanese input for Firefox and Chrome userscript managers",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test test/*.test.ts",
+    "test:browser": "node scripts/browser-test.mjs",
+    "test:editors": "node scripts/editor-test.mjs",
+    "check": "npm run typecheck && npm test && npm run build && npm run test:browser && npm run test:editors"
+  },
+  "devDependencies": {
+    "@codemirror/commands": "^6.11.1",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.13",
+    "@tiptap/core": "^3.31.4",
+    "@tiptap/starter-kit": "^3.31.4",
+    "@types/codemirror": "^5.60.18",
+    "@types/node": "^24.0.0",
+    "codemirror5": "npm:codemirror@^5.65.21",
+    "esbuild": "^0.25.0",
+    "monaco-editor": "^0.57.0",
+    "playwright": "1.62.1",
+    "prosemirror-commands": "^1.7.2",
+    "prosemirror-history": "^1.5.1",
+    "prosemirror-model": "^1.25.12",
+    "prosemirror-schema-basic": "^1.2.5",
+    "prosemirror-state": "^1.4.4",
+    "prosemirror-view": "^1.42.6",
+    "quill": "^2.0.3",
+    "typescript": "^5.9.0"
+  }
+}
