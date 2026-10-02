@@ -5,6 +5,7 @@ import { fixtures, container } from '../shared/fixture.ts';
 const cm5 = CodeMirror(container('cm5'), { value: '', lineNumbers: true, inputStyle: 'textarea' });
 fixtures.cm5 = {
   get: () => cm5.getValue(),
+  cursor: () => cm5.indexFromPos(cm5.getCursor()),
   focus: () => cm5.focus(),
   set: (value: string) => {
     cm5.setValue(value);
