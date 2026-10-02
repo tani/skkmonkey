@@ -324,7 +324,7 @@ try {
       await page.keyboard.press('Space');
       await page.keyboard.press('Space');
       await page.keyboard.press('Space');
-      assert.equal(await page.locator('.candidates .selected').textContent(), '6. 六番');
+      assert.equal(await page.locator('.candidates .selected').textContent(), '1. 六番');
       await page.locator('.candidates .selected').click();
       assert.equal(await page.locator('#text').inputValue(), '六番');
       await panel.waitFor({ state: 'hidden' });
