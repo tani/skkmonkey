@@ -1,4 +1,5 @@
 import type { EditorAdapter } from '../types.ts';
+import { captureTextSelection, stabilizeInsertedCaret } from '../shared/selection.ts';
 
 function isSlackComposer(element: HTMLElement): boolean {
   if (!element.isContentEditable) return false;
@@ -17,6 +18,7 @@ function textOf(root: HTMLElement): string {
 
 function insertSlack(root: HTMLElement, text: string): boolean {
   root.focus();
+  const bookmark = captureTextSelection(root);
 
   // Slack's composer is a React controlled contenteditable. Mutating DOM or
   // dispatching only an input event does not update React state. Use the native
@@ -47,6 +49,7 @@ function insertSlack(root: HTMLElement, text: string): boolean {
       data: text,
     }),
   );
+  stabilizeInsertedCaret(bookmark, text.length);
   return true;
 }
 

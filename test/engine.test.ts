@@ -59,12 +59,20 @@ test('number keys select and commit candidates on the visible candidate page', (
   assert.equal(e.handle('3').committed, '候補3');
   assert.equal(e.phase, 'direct');
 
+  e.dictionary.base.set(
+    'ためし',
+    Array.from({ length: 7 }, (_, index) => ({ text: `候補${index + 1}` })),
+  );
   type(e, 'Tameshi ');
   for (let index = 0; index < 5; index++) e.handle(' ');
   assert.equal(e.preedit, '▼候補6');
   assert.equal(e.handle('2').committed, '候補7');
   assert.equal(e.phase, 'direct');
 
+  e.dictionary.base.set(
+    'ためし',
+    Array.from({ length: 7 }, (_, index) => ({ text: `候補${index + 1}` })),
+  );
   type(e, 'Tameshi ');
   for (let index = 0; index < 5; index++) e.handle(' ');
   assert.equal(e.handle('5').committed, '');

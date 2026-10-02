@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SKK Browser IME
 // @namespace    cc.tani.skk-userscript
-// @version      0.3.4
+// @version      0.3.5
 // @description  Local SKK Japanese input; TypeScript, skkeleton kana rules, local dictionaries
 // @match        https://*/*
 // @match        http://*/*
@@ -712,6 +712,7 @@ misrepresented as being the original software.
 	}
 	function insertSlack(root, text) {
 		root.focus();
+		const bookmark = captureTextSelection(root);
 		const before = new InputEvent("beforeinput", {
 			bubbles: true,
 			composed: true,
@@ -734,6 +735,7 @@ misrepresented as being the original software.
 			inputType: "insertText",
 			data: text
 		}));
+		stabilizeInsertedCaret(bookmark, text.length);
 		return true;
 	}
 	var adapter$6 = {
@@ -819,8 +821,65 @@ misrepresented as being the original software.
 		insert: (element, text) => nativeContext(element) ? typeIntoEditContext(element, text) : insertTextarea(element, text)
 	};
 	//#endregion
+	//#region src/editors/shared/selection.ts
+	function offsetAt(root, node, offset) {
+		const range = root.ownerDocument.createRange();
+		range.selectNodeContents(root);
+		range.setEnd(node, offset);
+		return range.toString().length;
+	}
+	function captureTextSelection(element) {
+		const root = element.isContentEditable ? element : element.closest('[contenteditable]:not([contenteditable="false"])');
+		if (!root) return null;
+		const selection = root.ownerDocument.getSelection();
+		if (!selection?.rangeCount) return null;
+		const range = selection.getRangeAt(0);
+		if (!root.contains(range.startContainer) || !root.contains(range.endContainer)) return null;
+		return { root, start: offsetAt(root, range.startContainer, range.startOffset), end: offsetAt(root, range.endContainer, range.endOffset) };
+	}
+	function pointAt(root, offset) {
+		const walker = root.ownerDocument.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+		let remaining = offset, node;
+		while (node = walker.nextNode()) {
+			const length = node.textContent?.length ?? 0;
+			if (remaining <= length) return [node, remaining];
+			remaining -= length;
+		}
+		return offset === 0 ? [root, 0] : null;
+	}
+	function currentOffset(root) {
+		const selection = root.ownerDocument.getSelection();
+		if (!selection?.rangeCount) return null;
+		const range = selection.getRangeAt(0);
+		if (!range.collapsed || !root.contains(range.startContainer)) return null;
+		return offsetAt(root, range.startContainer, range.startOffset);
+	}
+	function stabilizeInsertedCaret(bookmark, insertedLength) {
+		if (!bookmark) return;
+		const { root } = bookmark;
+		const target = bookmark.start + insertedLength;
+		const restore = () => {
+			if (!root.isConnected) return;
+			const current = currentOffset(root);
+			const length = root.textContent?.length ?? 0;
+			if (current === target || current !== length || target === length) return;
+			const point = pointAt(root, target);
+			if (!point) return;
+			const range = root.ownerDocument.createRange();
+			range.setStart(point[0], point[1]);
+			range.collapse(true);
+			const selection = root.ownerDocument.getSelection();
+			selection?.removeAllRanges();
+			selection?.addRange(range);
+			root.ownerDocument.dispatchEvent(new Event("selectionchange"));
+		};
+		restore();
+		requestAnimationFrame(restore);
+	}
+	//#endregion
 	//#region src/editors/shared/clipboard.ts
 	function pasteIntoComponent(element, text) {
+		const selection = captureTextSelection(element);
 		element.ownerDocument.dispatchEvent(new Event("selectionchange"));
 		const data = new DataTransfer();
 		data.setData("text/plain", text);
@@ -831,6 +890,7 @@ misrepresented as being the original software.
 		});
 		Object.defineProperty(paste, "clipboardData", { value: data });
 		element.dispatchEvent(paste);
+		if (paste.defaultPrevented) stabilizeInsertedCaret(selection, text.length);
 		return paste.defaultPrevented;
 	}
 	//#endregion
