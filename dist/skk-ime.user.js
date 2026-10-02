@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SKK Browser IME
 // @namespace    cc.tani.skk-userscript
-// @version      0.3.3
+// @version      0.3.4
 // @description  Local SKK Japanese input; TypeScript, skkeleton kana rules, local dictionaries
 // @match        https://*/*
 // @match        http://*/*
@@ -1074,6 +1074,8 @@ misrepresented as being the original software.
 			if (!this.valid()) return false;
 			if (!text) return true;
 			const editor = this.editor;
+			const component = componentFor(editor);
+			if (component) return component.adapter.insert(editor, text);
 			const before = new InputEvent("beforeinput", {
 				bubbles: true,
 				composed: true,
@@ -1082,8 +1084,6 @@ misrepresented as being the original software.
 				data: text
 			});
 			if (!editor.dispatchEvent(before) || !this.valid()) return false;
-			const component = componentFor(editor);
-			if (component) return component.adapter.insert(editor, text);
 			if (editor instanceof HTMLInputElement || editor instanceof HTMLTextAreaElement) return insertInput(editor, text);
 			return insertContenteditable(editor, text, this.range, selectionFor(editor));
 		}

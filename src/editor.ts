@@ -117,7 +117,14 @@ export class Bookmark {
     if (!this.valid()) return false;
     if (!text) return true;
     const editor = this.editor;
-    // Sites can veto insertion via the standard cancelable beforeinput event.
+    // Component editors own their input transaction. Sending a generic
+    // beforeinput first and then an adapter-specific paste/EditContext event
+    // gives one SKK commit two competing insertion protocols and can move the
+    // component's model selection between consecutive kana commits.
+    const component = componentFor(editor);
+    if (component) return component.adapter.insert(editor, text);
+
+    // Native fields use the standard beforeinput contract before mutation.
     const before = new InputEvent('beforeinput', {
       bubbles: true,
       composed: true,
@@ -126,8 +133,6 @@ export class Bookmark {
       data: text,
     });
     if (!editor.dispatchEvent(before) || !this.valid()) return false;
-    const component = componentFor(editor);
-    if (component) return component.adapter.insert(editor, text);
     if (editor instanceof HTMLInputElement || editor instanceof HTMLTextAreaElement)
       return insertInput(editor, text);
     return insertContenteditable(editor, text, this.range!, selectionFor(editor));

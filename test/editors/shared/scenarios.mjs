@@ -88,6 +88,25 @@ export async function runScenarios(page, name, errors) {
     await expectModel(id, 'alpha OLD omega');
     await page.keyboard.press(id === 'quill' ? 'Control+Shift+z' : 'Control+y');
     await expectModel(id, 'alpha 日本 omega');
+
+    // Direct kana commits happen syllable by syllable. Each commit must keep
+    // the editor model selection at the insertion point instead of falling
+    // back to the end of the document after a component rerender.
+    await reset(id, 'alpha OLD omega');
+    await page.evaluate((id) => window.fixture[id].select(6, 9), id);
+    await page.evaluate(
+      () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+    );
+    await page.keyboard.type('kana');
+    await expectModel(id, 'alpha かな omega');
+
+    await reset(id, 'alpha omega');
+    await page.evaluate((id) => window.fixture[id].select(6, 6), id);
+    await page.evaluate(
+      () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+    );
+    await page.keyboard.type('kana');
+    await expectModel(id, 'alpha かなomega');
     await reset(id);
     await page.keyboard.type('Nihon ');
     await page.keyboard.press('Escape');
