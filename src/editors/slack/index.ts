@@ -6,8 +6,8 @@ function isSlackComposer(element: HTMLElement): boolean {
   const cls = element.className;
   return (
     role === 'textbox' &&
-    (typeof cls === 'string' &&
-      /(?:ql-editor|c-texty_input|slack|message)/i.test(cls + ' ' + element.outerHTML.slice(0, 300)))
+    typeof cls === 'string' &&
+    /(?:ql-editor|c-texty_input|slack|message)/i.test(cls + ' ' + element.outerHTML.slice(0, 300))
   );
 }
 
