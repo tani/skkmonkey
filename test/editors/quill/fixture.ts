@@ -8,6 +8,7 @@ const quill = new Quill(container('quill'), {
 });
 fixtures.quill = {
   get: () => quill.getText().replace(/\n$/, ''),
+  cursor: () => quill.getSelection()?.index ?? -1,
   focus: () => quill.focus(),
   set: (value: string) => {
     quill.setText(value);
