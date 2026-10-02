@@ -20,6 +20,7 @@ function makeMonaco(name: string, nativeEditContext: boolean) {
   });
   fixtures[name] = {
     get: () => editor.getValue(),
+    cursor: () => editor.getModel()!.getOffsetAt(editor.getPosition()!),
     focus: () => editor.focus(),
     set: (value: string) => {
       editor.setValue(value);
