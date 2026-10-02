@@ -15,6 +15,7 @@ const pm = new PMView(container('pm'), {
 });
 fixtures.pm = {
   get: () => pm.state.doc.textContent,
+  cursor: () => pm.state.selection.from - 1,
   focus: () => pm.focus(),
   set: (value: string) => {
     const doc = schema.node('doc', null, [
