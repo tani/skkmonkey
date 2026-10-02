@@ -2,6 +2,7 @@ export interface TextSelectionBookmark {
   root: HTMLElement;
   start: number;
   end: number;
+  length: number;
 }
 
 function offsetAt(root: HTMLElement, node: Node, offset: number): number {
@@ -24,6 +25,7 @@ export function captureTextSelection(element: HTMLElement): TextSelectionBookmar
     root,
     start: offsetAt(root, range.startContainer, range.startOffset),
     end: offsetAt(root, range.endContainer, range.endOffset),
+    length: root.textContent?.length ?? 0,
   };
 }
 
@@ -54,10 +56,13 @@ export function stabilizeInsertedCaret(
   if (!bookmark) return;
   const { root } = bookmark;
   const target = bookmark.start + insertedLength;
+  const expectedLength = bookmark.length - (bookmark.end - bookmark.start) + insertedLength;
   const restore = (): void => {
     if (!root.isConnected) return;
     const current = currentOffset(root);
     const length = root.textContent?.length ?? 0;
+    // A later SKK commit or page edit supersedes this scheduled recovery.
+    if (length !== expectedLength) return;
     // Preserve a correct selection and never override an intentional move.
     // The recovery is only for the observed component failure mode: a
     // transaction inserts at the right place but DOM selection snaps to EOF.

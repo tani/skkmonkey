@@ -49,35 +49,30 @@ test('Shift begins reading; Space selects, x backs up, Enter confirms and learns
   assert.equal(e.preedit, '▼感じ');
 });
 test('number keys select and commit candidates on the visible candidate page', () => {
-  const e = make();
-  e.dictionary.base.set(
-    'ためし',
-    Array.from({ length: 7 }, (_, index) => ({ text: `候補${index + 1}` })),
-  );
-  type(e, 'Tameshi ');
-  assert.equal(e.preedit, '▼候補1');
-  assert.equal(e.handle('3').committed, '候補3');
-  assert.equal(e.phase, 'direct');
+  const candidates = Array.from({ length: 7 }, (_, index) => ({ text: `候補${index + 1}` }));
 
-  e.dictionary.base.set(
-    'ためし',
-    Array.from({ length: 7 }, (_, index) => ({ text: `候補${index + 1}` })),
-  );
-  type(e, 'Tameshi ');
-  for (let index = 0; index < 5; index++) e.handle(' ');
-  assert.equal(e.preedit, '▼候補6');
-  assert.equal(e.handle('2').committed, '候補7');
-  assert.equal(e.phase, 'direct');
+  const first = make();
+  first.dictionary.base.set('ためし', candidates);
+  type(first, 'Tameshi ');
+  assert.equal(first.preedit, '▼候補1');
+  assert.equal(first.handle('3').committed, '候補3');
+  assert.equal(first.phase, 'direct');
 
-  e.dictionary.base.set(
-    'ためし',
-    Array.from({ length: 7 }, (_, index) => ({ text: `候補${index + 1}` })),
-  );
-  type(e, 'Tameshi ');
-  for (let index = 0; index < 5; index++) e.handle(' ');
-  assert.equal(e.handle('5').committed, '');
-  assert.equal(e.phase, 'candidate');
-  assert.equal(e.preedit, '▼候補6');
+  const second = make();
+  second.dictionary.base.set('ためし', candidates);
+  type(second, 'Tameshi ');
+  for (let index = 0; index < 5; index++) second.handle(' ');
+  assert.equal(second.preedit, '▼候補6');
+  assert.equal(second.handle('2').committed, '候補7');
+  assert.equal(second.phase, 'direct');
+
+  const missing = make();
+  missing.dictionary.base.set('ためし', candidates);
+  type(missing, 'Tameshi ');
+  for (let index = 0; index < 5; index++) missing.handle(' ');
+  assert.equal(missing.handle('5').committed, '');
+  assert.equal(missing.phase, 'candidate');
+  assert.equal(missing.preedit, '▼候補6');
 });
 test('candidate commits before subsequent typing without dropping pending romaji', () => {
   const e = make();

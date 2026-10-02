@@ -835,7 +835,7 @@ misrepresented as being the original software.
 		if (!selection?.rangeCount) return null;
 		const range = selection.getRangeAt(0);
 		if (!root.contains(range.startContainer) || !root.contains(range.endContainer)) return null;
-		return { root, start: offsetAt(root, range.startContainer, range.startOffset), end: offsetAt(root, range.endContainer, range.endOffset) };
+		return { root, start: offsetAt(root, range.startContainer, range.startOffset), end: offsetAt(root, range.endContainer, range.endOffset), length: root.textContent?.length ?? 0 };
 	}
 	function pointAt(root, offset) {
 		const walker = root.ownerDocument.createTreeWalker(root, NodeFilter.SHOW_TEXT);
@@ -858,10 +858,12 @@ misrepresented as being the original software.
 		if (!bookmark) return;
 		const { root } = bookmark;
 		const target = bookmark.start + insertedLength;
+		const expectedLength = bookmark.length - (bookmark.end - bookmark.start) + insertedLength;
 		const restore = () => {
 			if (!root.isConnected) return;
 			const current = currentOffset(root);
 			const length = root.textContent?.length ?? 0;
+			if (length !== expectedLength) return;
 			if (current === target || current !== length || target === length) return;
 			const point = pointAt(root, target);
 			if (!point) return;
@@ -879,8 +881,8 @@ misrepresented as being the original software.
 	//#endregion
 	//#region src/editors/shared/clipboard.ts
 	function pasteIntoComponent(element, text) {
-		const selection = captureTextSelection(element);
 		element.ownerDocument.dispatchEvent(new Event("selectionchange"));
+		const selection = captureTextSelection(element);
 		const data = new DataTransfer();
 		data.setData("text/plain", text);
 		const paste = new ClipboardEvent("paste", {
