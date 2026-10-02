@@ -5,10 +5,12 @@ import { adapter as codemirror6 } from './codemirror6/index.ts';
 import { adapter as tiptap } from './tiptap/index.ts';
 import { adapter as prosemirror } from './prosemirror/index.ts';
 import { adapter as quill } from './quill/index.ts';
+import { adapter as slack } from './slack/index.ts';
 
 // Specific wrappers precede their generic underlying editor. Selection is by
 // input capabilities/DOM, never an assumed globally accessible version string.
 export const adapters: readonly EditorAdapter[] = [
+  slack,
   monaco,
   codemirror5,
   codemirror6,
