@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SKK Browser IME
 // @namespace    cc.tani.skk-userscript
-// @version      0.3.1
+// @version      0.3.2
 // @description  Local SKK Japanese input; TypeScript, skkeleton kana rules, local dictionaries
 // @match        https://*/*
 // @match        http://*/*
@@ -692,6 +692,57 @@ misrepresented as being the original software.
 		return context && typeof context.text === "string" ? context : null;
 	}
 	//#endregion
+	//#region src/editors/slack/index.ts
+	function isSlackComposer(element) {
+		if (!element.isContentEditable) return false;
+		const role = element.getAttribute("role");
+		const cls = element.className;
+		return role === "textbox" && typeof cls === "string" && /(?:ql-editor|c-texty_input|slack|message)/i.test(cls + " " + element.outerHTML.slice(0, 300));
+	}
+	function textOf(root) {
+		return root.innerText ?? root.textContent ?? "";
+	}
+	function insertSlack(root, text) {
+		root.focus();
+		const before = new InputEvent("beforeinput", {
+			bubbles: true,
+			composed: true,
+			cancelable: true,
+			inputType: "insertText",
+			data: text
+		});
+		if (!root.dispatchEvent(before)) return false;
+		const selection = root.ownerDocument.getSelection();
+		if (!selection || selection.rangeCount === 0) return false;
+		const range = selection.getRangeAt(0);
+		range.deleteContents();
+		range.insertNode(root.ownerDocument.createTextNode(text));
+		range.collapse(false);
+		selection.removeAllRanges();
+		selection.addRange(range);
+		root.dispatchEvent(new InputEvent("input", {
+			bubbles: true,
+			composed: true,
+			inputType: "insertText",
+			data: text
+		}));
+		return true;
+	}
+	var adapter$6 = {
+		kind: "slack",
+		detect(element) {
+			if (isSlackComposer(element)) return element;
+			const candidate = element.closest('[contenteditable="true"][role="textbox"]');
+			return candidate && isSlackComposer(candidate) ? candidate : null;
+		},
+		snapshot(root) {
+			return textOf(root);
+		},
+		insert(element, text) {
+			return insertSlack(element, text);
+		}
+	};
+	//#endregion
 	//#region src/editors/monaco/edit-context.ts
 	function typeIntoEditContext(element, text) {
 		const context = nativeContext(element);
@@ -864,6 +915,7 @@ misrepresented as being the original software.
 	//#endregion
 	//#region src/editors/registry.ts
 	var adapters = [
+		adapter$6,
 		adapter$5,
 		adapter$4,
 		adapter$3,
