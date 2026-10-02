@@ -10,6 +10,7 @@ const tiptap = new Tiptap({
 });
 fixtures.tiptap = {
   get: () => tiptap.getText(),
+  cursor: () => tiptap.state.selection.from - 1,
   focus: () => tiptap.view.focus(),
   set: (value: string) => {
     const doc = tiptap.schema.nodeFromJSON({
