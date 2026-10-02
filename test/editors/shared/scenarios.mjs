@@ -99,6 +99,7 @@ export async function runScenarios(page, name, errors) {
     );
     await page.keyboard.type('kana');
     await expectModel(id, 'alpha かな omega');
+    assert.equal(await page.evaluate((id) => window.fixture[id].cursor(), id), 8);
 
     await reset(id, 'alpha omega');
     await page.evaluate((id) => window.fixture[id].select(6, 6), id);
@@ -107,6 +108,7 @@ export async function runScenarios(page, name, errors) {
     );
     await page.keyboard.type('kana');
     await expectModel(id, 'alpha かなomega');
+    assert.equal(await page.evaluate((id) => window.fixture[id].cursor(), id), 8);
     await reset(id);
     await page.keyboard.type('Nihon ');
     await page.keyboard.press('Escape');
