@@ -5,7 +5,8 @@ export type ComponentKind =
   | 'codemirror6'
   | 'prosemirror'
   | 'tiptap'
-  | 'quill';
+  | 'quill'
+  | 'slack';
 export interface EditorAdapter {
   readonly kind: ComponentKind;
   detect(element: HTMLElement): HTMLElement | null;
