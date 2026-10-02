@@ -22,6 +22,7 @@ const makeView = (value: string) =>
 let cm6 = makeView('');
 fixtures.cm6 = {
   get: () => cm6.state.doc.toString(),
+  cursor: () => cm6.state.selection.main.head,
   focus: () => cm6.focus(),
   set: (value: string) => {
     // Old CM6 setState does not reset its EditContext document window. Recreate
