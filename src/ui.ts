@@ -95,7 +95,7 @@ export class UI {
       const start = Math.floor(engine.index / 5) * 5;
       engine.candidates.slice(start, start + 5).forEach((candidate, offset) => {
         const button = document.createElement('button');
-        button.textContent = `${start + offset + 1}. ${candidate.text}${engine.display(engine.okuri)}`;
+        button.textContent = `${offset + 1}. ${candidate.text}${engine.display(engine.okuri)}`;
         button.title = `${candidate.text}${engine.display(engine.okuri)}${candidate.annotation ? ' — ' + candidate.annotation : ''}`;
         button.classList.toggle('selected', start + offset === engine.index);
         button.setAttribute('aria-pressed', String(start + offset === engine.index));

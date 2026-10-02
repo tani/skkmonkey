@@ -48,6 +48,29 @@ test('Shift begins reading; Space selects, x backs up, Enter confirms and learns
   type(e, 'Kanji ');
   assert.equal(e.preedit, '▼感じ');
 });
+test('number keys select and commit candidates on the visible candidate page', () => {
+  const e = make();
+  e.dictionary.base.set(
+    'ためし',
+    Array.from({ length: 7 }, (_, index) => ({ text: `候補${index + 1}` })),
+  );
+  type(e, 'Tameshi ');
+  assert.equal(e.preedit, '▼候補1');
+  assert.equal(e.handle('3').committed, '候補3');
+  assert.equal(e.phase, 'direct');
+
+  type(e, 'Tameshi ');
+  for (let index = 0; index < 5; index++) e.handle(' ');
+  assert.equal(e.preedit, '▼候補6');
+  assert.equal(e.handle('2').committed, '候補7');
+  assert.equal(e.phase, 'direct');
+
+  type(e, 'Tameshi ');
+  for (let index = 0; index < 5; index++) e.handle(' ');
+  assert.equal(e.handle('5').committed, '');
+  assert.equal(e.phase, 'candidate');
+  assert.equal(e.preedit, '▼候補6');
+});
 test('candidate commits before subsequent typing without dropping pending romaji', () => {
   const e = make();
   type(e, 'Nihon ');

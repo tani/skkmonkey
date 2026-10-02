@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SKK Browser IME
 // @namespace    cc.tani.skk-userscript
-// @version      0.3.2
+// @version      0.3.3
 // @description  Local SKK Japanese input; TypeScript, skkeleton kana rules, local dictionaries
 // @match        https://*/*
 // @match        http://*/*
@@ -606,6 +606,14 @@ misrepresented as being the original software.
 				return true;
 			}
 			if (this.phase === "candidate") {
+				if (/^[1-5]$/.test(key)) {
+					const pageStart = Math.floor(this.index / 5) * 5;
+					const selected = pageStart + Number(key) - 1;
+					if (selected >= this.candidates.length) return true;
+					this.index = selected;
+					this.output += this.finish();
+					return true;
+				}
 				if (key === " ") {
 					if (this.index + 1 < this.candidates.length) this.index++;
 					else this.request = {
@@ -1252,7 +1260,7 @@ ime /IME;Input Method Editor/
 				const start = Math.floor(engine.index / 5) * 5;
 				engine.candidates.slice(start, start + 5).forEach((candidate, offset) => {
 					const button = document.createElement("button");
-					button.textContent = `${start + offset + 1}. ${candidate.text}${engine.display(engine.okuri)}`;
+					button.textContent = `${offset + 1}. ${candidate.text}${engine.display(engine.okuri)}`;
 					button.title = `${candidate.text}${engine.display(engine.okuri)}${candidate.annotation ? " — " + candidate.annotation : ""}`;
 					button.classList.toggle("selected", start + offset === engine.index);
 					button.setAttribute("aria-pressed", String(start + offset === engine.index));

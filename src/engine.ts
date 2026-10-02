@@ -144,6 +144,14 @@ export class Engine {
       return true;
     }
     if (this.phase === 'candidate') {
+      if (/^[1-5]$/.test(key)) {
+        const pageStart = Math.floor(this.index / 5) * 5;
+        const selected = pageStart + Number(key) - 1;
+        if (selected >= this.candidates.length) return true;
+        this.index = selected;
+        this.output += this.finish();
+        return true;
+      }
       if (key === ' ') {
         if (this.index + 1 < this.candidates.length) this.index++;
         else this.request = { key: this.key, reading: this.display(this.reading + this.okuri) };
