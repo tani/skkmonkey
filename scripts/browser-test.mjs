@@ -113,6 +113,46 @@ try {
       await panel.waitFor({ state: 'visible' });
       await typeKeys('a');
       await panel.waitFor({ state: 'hidden' });
+      const burst = await page.evaluate(() => {
+        const field = document.querySelector('#text');
+        field.value = '';
+        let measurements = 0;
+        const measure = field.getBoundingClientRect.bind(field);
+        field.getBoundingClientRect = () => {
+          measurements++;
+          return measure();
+        };
+        const values = [];
+        // Dispatch a burst without waiting between keys so even a busy runner
+        // cannot fire the preedit timer partway through a syllable.
+        try {
+          for (const key of 'kanashikatta') {
+            field.dispatchEvent(
+              new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }),
+            );
+            values.push(field.value);
+          }
+        } finally {
+          delete field.getBoundingClientRect;
+        }
+        return { values, measurements };
+      });
+      assert.deepEqual(burst.values, [
+        '',
+        'か',
+        'か',
+        'かな',
+        'かな',
+        'かな',
+        'かなし',
+        'かなし',
+        'かなしか',
+        'かなしか',
+        'かなしかっ',
+        'かなしかった',
+      ]);
+      assert.equal(burst.measurements, 0, 'direct typing should not lay out the preedit panel');
+      await panel.waitFor({ state: 'hidden' });
       await typeKeys('Kanji ');
       await panel.waitFor({ state: 'visible' });
       const compact = await panel.boundingBox();

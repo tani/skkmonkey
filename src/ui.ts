@@ -3,6 +3,7 @@ import type { Editor } from './editor.ts';
 import { componentFor } from './component.ts';
 
 const labels = { ascii: 'A', hiragana: 'あ', katakana: 'ア', fullwidth: 'Ａ' };
+const directPreeditDelay = 120;
 
 export class UI {
   readonly host = document.createElement('div');
@@ -14,6 +15,9 @@ export class UI {
   private lastMode: Engine['mode'] = 'ascii';
   private modeTimer?: ReturnType<typeof setTimeout>;
   private statusTimer?: ReturnType<typeof setTimeout>;
+  private directTimer?: ReturnType<typeof setTimeout>;
+  private directPending = '';
+  private showDirectPreedit = false;
   private refresh = (): void => {};
   constructor(onToggle: () => void) {
     this.host.style.cssText =
@@ -72,9 +76,24 @@ export class UI {
         this.refresh();
       }, 800);
     }
-    this.panel.hidden =
-      !editor || !this.settings.hidden || !(engine.active || this.modeNotice || this.status);
-    if (!editor || this.panel.hidden) return;
+    const canShow = !!editor && this.settings.hidden;
+    const directPending = canShow && engine.phase === 'direct' ? engine.romaji.pending : '';
+    if (directPending !== this.directPending) {
+      this.directPending = directPending;
+      clearTimeout(this.directTimer);
+      if (!directPending) this.showDirectPreedit = false;
+      else if (!this.showDirectPreedit) {
+        // Give fast syllables time to complete before building and laying out a panel.
+        this.directTimer = setTimeout(() => {
+          this.showDirectPreedit = true;
+          this.refresh();
+        }, directPreeditDelay);
+      }
+    }
+    const preeditText = engine.phase === 'direct' && !this.showDirectPreedit ? '' : engine.preedit;
+    const hidden = !canShow || !(preeditText || this.modeNotice || this.status);
+    if (this.panel.hidden !== hidden) this.panel.hidden = hidden;
+    if (!editor || hidden) return;
     this.panel.replaceChildren();
     const head = document.createElement('div');
     head.className = 'head';
@@ -84,8 +103,8 @@ export class UI {
     badge.title = 'Toggle SKK: Ctrl+Shift+Space';
     const preedit = document.createElement('span');
     preedit.className = 'preedit';
-    preedit.textContent = engine.preedit;
-    preedit.title = engine.preedit;
+    preedit.textContent = preeditText;
+    preedit.title = preeditText;
     preedit.setAttribute('aria-live', 'polite');
     head.append(badge, preedit);
     this.panel.append(head);
