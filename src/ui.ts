@@ -76,8 +76,9 @@ export class UI {
         this.refresh();
       }, 800);
     }
-    const canShow = !!editor && this.settings.hidden;
-    const directPending = canShow && engine.phase === 'direct' ? engine.romaji.pending : '';
+    const direct = engine.phase === 'direct';
+    const canShow = !!editor && this.settings.hidden && !(direct && engine.mode === 'hiragana');
+    const directPending = canShow && direct ? engine.romaji.pending : '';
     if (directPending !== this.directPending) {
       this.directPending = directPending;
       clearTimeout(this.directTimer);
@@ -90,7 +91,7 @@ export class UI {
         }, directPreeditDelay);
       }
     }
-    const preeditText = engine.phase === 'direct' && !this.showDirectPreedit ? '' : engine.preedit;
+    const preeditText = direct && !this.showDirectPreedit ? '' : engine.preedit;
     const hidden = !canShow || !(preeditText || this.modeNotice || this.status);
     if (this.panel.hidden !== hidden) this.panel.hidden = hidden;
     if (!editor || hidden) return;

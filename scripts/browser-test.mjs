@@ -107,12 +107,23 @@ try {
       await page.locator('#text').focus();
       await panel.waitFor({ state: 'hidden' });
       await page.keyboard.press('Control+j');
+      assert.equal(await panel.isVisible(), false);
+      await typeKeys('q');
       await panel.waitFor({ state: 'visible' });
       await panel.waitFor({ state: 'hidden' });
       await typeKeys('k');
       await panel.waitFor({ state: 'visible' });
-      await typeKeys('a');
+      await page.keyboard.press('Escape');
       await panel.waitFor({ state: 'hidden' });
+      await typeKeys('q');
+      assert.equal(await panel.isVisible(), false);
+      await typeKeys('k');
+      // Wait past the direct preedit delay while the consonant remains pending.
+      await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 200)));
+      assert.equal(await panel.isVisible(), false);
+      assert.equal(await page.locator('#text').inputValue(), '');
+      await typeKeys('a');
+      assert.equal(await page.locator('#text').inputValue(), 'か');
       const burst = await page.evaluate(() => {
         const field = document.querySelector('#text');
         field.value = '';
@@ -123,8 +134,6 @@ try {
           return measure();
         };
         const values = [];
-        // Dispatch a burst without waiting between keys so even a busy runner
-        // cannot fire the preedit timer partway through a syllable.
         try {
           for (const key of 'kanashikatta') {
             field.dispatchEvent(
@@ -153,8 +162,12 @@ try {
       ]);
       assert.equal(burst.measurements, 0, 'direct typing should not lay out the preedit panel');
       await panel.waitFor({ state: 'hidden' });
-      await typeKeys('Kanji ');
-      await panel.waitFor({ state: 'visible' });
+      await typeKeys('Kanji');
+      assert.equal(await panel.isVisible(), true);
+      assert.match(await uiText(), /▽かんじ/);
+      await page.keyboard.press('Space');
+      assert.equal(await panel.isVisible(), true);
+      assert.match(await uiText(), /▼漢字/);
       const compact = await panel.boundingBox();
       assert.ok(compact.width <= 320 && compact.height <= 60, JSON.stringify(compact));
       await page.locator('#input').focus();
@@ -168,7 +181,7 @@ try {
       await page.keyboard.press('Escape');
       await panel.waitFor({ state: 'hidden' });
       console.log(
-        `${name}: idle hiding, temporary mode badge, preedit, compact candidates, blur, confirmation and cancellation passed`,
+        `${name}: hidden direct hiragana, katakana badge and preedit, compact candidates, blur, confirmation and cancellation passed`,
       );
       await reset();
       await typeKeys('Jisho ');
