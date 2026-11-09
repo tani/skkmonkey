@@ -38,6 +38,8 @@ jobs:
           - prosemirror/legacy
           - quill/current
           - quill/legacy
+          - slate/current
+          - slate/legacy
           - tiptap/current
           - tiptap/legacy
         browser: [chromium, firefox]

@@ -114,16 +114,24 @@ lockfile-pinned dependency profiles in Chromium and Firefox:
 | ------------ | -------------- | --------------- |
 | Monaco       | 0.44.0         | 0.57.0          |
 | CodeMirror 5 | 5.58.3         | 5.65.21         |
-| CodeMirror 6 | 6.28.6         | 6.43.13         |
-| ProseMirror  | 1.33.8         | 1.42.6          |
-| Tiptap       | 2.11.5         | 3.31.4          |
+| CodeMirror 6 | 6.28.6         | 6.43.15         |
+| ProseMirror  | 1.33.8         | 1.42.9          |
+| Tiptap       | 2.11.5         | 3.33.0          |
 | Quill        | 1.3.7          | 2.0.3           |
+| Slate React  | 0.112.1        | 0.147.5         |
 
 `current` is a fixed tested baseline, not an automatically moving latest version.
 Profile manifests include the full dependency set for modular editors. Both
 Monaco input modes are tested on the current profile when native EditContext is
 available; the older profile uses its textarea input. These are tested points,
 not a guarantee for every intervening release or custom configuration.
+
+The [Slate profiles](test/editors/slate/profiles) pair Slate React 0.112.1
+with Slate 0.112.0 and Slate React 0.147.5 with Slate 0.147.4. Both run the
+common model and undo/redo tests, plus a regression for typing `sarezu` to
+confirm `反映` and continue to `反映されず` while Slate delays the first edit.
+These fixtures use upstream Slate React. Discord's deployed composer has not
+been tested directly.
 
 Component adapters update the editor model and undo history. Custom keymaps,
 paste filters, collaboration, Monaco diff editors, and CodeMirror 5
@@ -174,7 +182,9 @@ in `src/editors/shared/`; ordinary fields in `src/editors/native/`. Monaco and C
 separate ordinary-input and EditContext modules. Quill 1 has a dedicated Delta
 insertion module: its legacy paste handler requires a real browser paste, so
 this module uses the container instance hook used by Quill.find. Quill 2 uses
-clipboard events. No editor library is imported into the production bundle. Tiptap has its own entry point and
+clipboard events. Slate handles plain-text insertion through its
+`beforeinput` path and checks the rendered text and selection before submitting
+queued input. No editor library is imported into the production bundle. Tiptap has its own entry point and
 shares ProseMirror insertion. Version-specific implementations are added only
 when tested behavior requires them; adapter selection uses DOM/capabilities.
 `src/editor.ts` manages bookmarks, and `src/component.ts` re-exports registry APIs.

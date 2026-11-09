@@ -14,6 +14,8 @@ interface Fixture {
   marked?: () => void;
   html?: () => string;
   multi?: () => void;
+  deferNext?: () => void;
+  release?: () => void;
 }
 
 declare global {
@@ -178,6 +180,26 @@ export async function runScenarios(page: Page, name: string, errors: string[]) {
     console.log(
       `${name}/${id}: kana, candidates, okuri, selected replacement, undo/redo, cancel, candidate click, cursor, delete, stale edit, read-only passed`,
     );
+  }
+  if (names.includes('slate')) {
+    for (const delayed of [false, true]) {
+      await reset('slate');
+      if (delayed) await page.evaluate(() => window.fixture.slate!.deferNext!());
+      await page.keyboard.type('Hannei ');
+      assert.match(
+        (await page.evaluate(() => window.skkUI.querySelector('.preedit')?.textContent)) ?? '',
+        /▼反映/,
+      );
+      // 's' confirms the candidate and starts the next syllable in one key.
+      await page.keyboard.type('sarezu');
+      if (delayed) {
+        assert.equal(await model('slate'), '');
+        await page.evaluate(() => window.fixture.slate!.release!());
+      }
+      await expectModel('slate', '反映されず');
+      assert.equal(await page.evaluate(() => window.fixture.slate!.cursor()), 5);
+    }
+    console.log(`${name}/slate: implicit candidate confirmation and delayed insertion passed`);
   }
   // Rich-text marks are preserved in the model, not merely in rendered DOM.
   if (names.includes('pm')) {

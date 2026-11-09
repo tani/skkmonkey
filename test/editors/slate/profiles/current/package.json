@@ -1,0 +1,17 @@
+{
+  "name": "skk-test-slate-current",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "slate": "0.147.4",
+    "slate-dom": "0.147.3",
+    "slate-history": "0.144.0",
+    "slate-react": "0.147.5"
+  },
+  "devDependencies": {
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0"
+  }
+}

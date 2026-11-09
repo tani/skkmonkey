@@ -18,6 +18,12 @@
       "prosemirror-keymap": ["./prosemirror/profiles/current/node_modules/prosemirror-keymap"],
       "@tiptap/core": ["./tiptap/profiles/current/node_modules/@tiptap/core"],
       "@tiptap/starter-kit": ["./tiptap/profiles/current/node_modules/@tiptap/starter-kit"],
+      "react": ["./slate/profiles/current/node_modules/@types/react"],
+      "react-dom": ["./slate/profiles/current/node_modules/@types/react-dom"],
+      "react-dom/client": ["./slate/profiles/current/node_modules/@types/react-dom/client.d.ts"],
+      "slate": ["./slate/profiles/current/node_modules/slate"],
+      "slate-history": ["./slate/profiles/current/node_modules/slate-history"],
+      "slate-react": ["./slate/profiles/current/node_modules/slate-react"],
       "quill": ["./quill/profiles/current/node_modules/quill"],
       "codemirror": ["./codemirror5/profiles/current/node_modules/@types/codemirror"]
     }

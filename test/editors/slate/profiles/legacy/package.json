@@ -1,0 +1,17 @@
+{
+  "name": "skk-test-slate-legacy",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "slate": "0.112.0",
+    "slate-dom": "0.112.2",
+    "slate-history": "0.110.3",
+    "slate-react": "0.112.1"
+  },
+  "devDependencies": {
+    "@types/react": "18.3.12",
+    "@types/react-dom": "18.3.1"
+  }
+}

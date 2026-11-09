@@ -33,7 +33,16 @@ const profileDir = profilePath
   : null;
 
 const label = profile ? `${profile.editor}/${profile.name}` : 'baseline';
-const ids = profile?.fixtures ?? ['monaco', 'monaco-native', 'cm5', 'cm6', 'pm', 'tiptap', 'quill'];
+const ids = profile?.fixtures ?? [
+  'monaco',
+  'monaco-native',
+  'cm5',
+  'cm6',
+  'pm',
+  'tiptap',
+  'quill',
+  'slate',
+];
 const dir = new URL(`../test-results/editors/${label}/`, import.meta.url);
 await mkdir(dir, { recursive: true });
 const entry = profile
@@ -46,7 +55,10 @@ if (profile)
   );
 await build({
   configFile: false,
-  define: { SKK_PROFILE_NATIVE: String(profile?.nativeEditContext ?? true) },
+  define: {
+    SKK_PROFILE_NATIVE: String(profile?.nativeEditContext ?? true),
+    'process.env.NODE_ENV': JSON.stringify('production'),
+  },
   plugins: [
     {
       name: 'editor-fixture-dependencies',
@@ -155,8 +167,9 @@ try {
       page.setDefaultTimeout(10000);
       const errors: string[] = [];
       page.on('pageerror', (error) => errors.push(String(error)));
-      await page.addInitScript(() => {
+      await page.addInitScript((withSlate) => {
         const store = new Map<string, unknown>();
+        if (withSlate) store.set('skk.dictionary.v1', 'はんえい /反映/');
         window.GM_getValue = (key, fallback) =>
           (store.get(key) as typeof fallback | undefined) ?? fallback;
         window.GM_setValue = (key, value) => {
@@ -172,7 +185,7 @@ try {
           if (options.mode === 'closed') window.skkUI = root;
           return root;
         };
-      });
+      }, ids.includes('slate'));
       await page.goto(url);
       await page.waitForFunction(() => window.fixtureReady);
       await page.evaluate(() => {
