@@ -18,8 +18,8 @@
     "typecheck:editors": "vpx scripts/editor-install.ts && vp lint --config test/editors/oxlint.json --tsconfig test/editors/tsconfig.json test/editors/*/fixture.ts test/editors/codemirror5.d.ts"
   },
   "devDependencies": {
-    "@types/node": "24.19.0",
-    "playwright": "1.62.1",
+    "@types/node": "24.19.2",
+    "playwright": "1.65.0",
     "vite-plus": "1.5.0"
   },
   "overrides": {
@@ -29,5 +29,5 @@
   "engines": {
     "node": "^22.18.0 || ^24.11.0 || >=26.0.0"
   },
-  "packageManager": "npm@11.9.0"
+  "packageManager": "npm@11.21.2"
 }
