@@ -1,18 +1,10 @@
 import { componentFor, componentSnapshot, nativeContext } from './component.ts';
 import { insertInput } from './editors/native/input.ts';
 import { insertContenteditable } from './editors/native/contenteditable.ts';
-import type { Editor } from './editors/types.ts';
+import { currentRange, selectionFor } from './editors/shared/selection.ts';
+import type { Editor, PendingInsertion } from './editors/types.ts';
 export type { Editor } from './editors/types.ts';
 export { findEditor } from './editors/native/index.ts';
-
-function selectionFor(editor: Editor): Selection | null {
-  const root = editor.getRootNode() as
-    | Document
-    | (ShadowRoot & { getSelection?: () => Selection | null });
-  return 'getSelection' in root && root.getSelection
-    ? root.getSelection()
-    : document.getSelection();
-}
 
 interface Boundary {
   path: number[];
@@ -51,13 +43,6 @@ function resolveBoundary(root: HTMLElement, boundary: Boundary): Node | null {
   const length = node instanceof CharacterData ? node.length : node.childNodes.length;
   if (node.nodeType !== boundary.nodeType || boundary.offset > length) return null;
   return textOffsetAt(root, node, boundary.offset) === boundary.textOffset ? node : null;
-}
-
-function currentRange(editor: Editor): Range | null {
-  const selection = selectionFor(editor);
-  if (!selection?.rangeCount) return null;
-  const range = selection.getRangeAt(0);
-  return editor.contains(range.commonAncestorContainer) ? range : null;
 }
 
 // A bookmark guards against asynchronous page edits or caret moves. Pending
@@ -164,7 +149,7 @@ export class Bookmark {
     editor.ownerDocument.dispatchEvent(new Event('selectionchange'));
     return true;
   }
-  insert(text: string): boolean {
+  insert(text: string): boolean | PendingInsertion {
     if (!this.valid()) return false;
     if (!text) return true;
     const editor = this.editor;

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SKK Browser IME
 // @namespace    cc.tani.skk-userscript
-// @version      0.3.8
+// @version      0.3.9
 // @description  Local SKK Japanese input; TypeScript, skkeleton kana rules, local dictionaries
 // @match        https://*/*
 // @match        http://*/*
@@ -755,7 +755,7 @@ misrepresented as being the original software.
 	}
 	//#endregion
 	//#region src/editors/monaco/index.ts
-	var adapter$6 = {
+	var adapter$7 = {
 		kind: "monaco",
 		detect(element) {
 			return element.matches("textarea.inputarea, .native-edit-context") ? element.closest(".monaco-editor") : null;
@@ -768,7 +768,17 @@ misrepresented as being the original software.
 	};
 	//#endregion
 	//#region src/editors/shared/selection.ts
-	function offsetAt(root, node, offset) {
+	function selectionFor(editor) {
+		const root = editor.getRootNode();
+		return "getSelection" in root && root.getSelection ? root.getSelection() : editor.ownerDocument.getSelection();
+	}
+	function currentRange(editor) {
+		const selection = selectionFor(editor);
+		if (!selection?.rangeCount) return null;
+		const range = selection.getRangeAt(0);
+		return editor.contains(range.commonAncestorContainer) ? range : null;
+	}
+	function offsetAt$1(root, node, offset) {
 		const range = root.ownerDocument.createRange();
 		range.selectNodeContents(root);
 		range.setEnd(node, offset);
@@ -783,8 +793,8 @@ misrepresented as being the original software.
 		if (!root.contains(range.startContainer) || !root.contains(range.endContainer)) return null;
 		return {
 			root,
-			start: offsetAt(root, range.startContainer, range.startOffset),
-			end: offsetAt(root, range.endContainer, range.endOffset),
+			start: offsetAt$1(root, range.startContainer, range.startOffset),
+			end: offsetAt$1(root, range.endContainer, range.endOffset),
 			length: root.textContent?.length ?? 0
 		};
 	}
@@ -804,7 +814,7 @@ misrepresented as being the original software.
 		if (!selection?.rangeCount) return null;
 		const range = selection.getRangeAt(0);
 		if (!range.collapsed || !root.contains(range.startContainer)) return null;
-		return offsetAt(root, range.startContainer, range.startOffset);
+		return offsetAt$1(root, range.startContainer, range.startOffset);
 	}
 	function stabilizeInsertedCaret(bookmark, insertedLength) {
 		if (!bookmark) return;
@@ -849,7 +859,7 @@ misrepresented as being the original software.
 	}
 	//#endregion
 	//#region src/editors/codemirror5/index.ts
-	var adapter$5 = {
+	var adapter$6 = {
 		kind: "codemirror5",
 		detect(element) {
 			if (!(element.matches("textarea") && !element.closest(".CodeMirror-dialog")) && !element.closest(".CodeMirror-code")) return null;
@@ -886,7 +896,7 @@ misrepresented as being the original software.
 	}
 	//#endregion
 	//#region src/editors/codemirror6/index.ts
-	var adapter$4 = {
+	var adapter$5 = {
 		kind: "codemirror6",
 		detect(element) {
 			if (!element.closest(".cm-content")) return null;
@@ -899,7 +909,7 @@ misrepresented as being the original software.
 	};
 	//#endregion
 	//#region src/editors/prosemirror/index.ts
-	var adapter$3 = {
+	var adapter$4 = {
 		kind: "prosemirror",
 		detect(element) {
 			return element.closest(".ProseMirror");
@@ -911,8 +921,8 @@ misrepresented as being the original software.
 	};
 	//#endregion
 	//#region src/editors/tiptap/index.ts
-	var adapter$2 = {
-		...adapter$3,
+	var adapter$3 = {
+		...adapter$4,
 		kind: "tiptap",
 		detect: (element) => element.closest(".tiptap.ProseMirror")
 	};
@@ -936,7 +946,7 @@ misrepresented as being the original software.
 	}
 	//#endregion
 	//#region src/editors/quill/index.ts
-	var adapter$1 = {
+	var adapter$2 = {
 		kind: "quill",
 		detect(element) {
 			if (!element.closest(".ql-editor")) return null;
@@ -946,6 +956,59 @@ misrepresented as being the original software.
 			return ((root.matches(".ql-editor") ? root : root.querySelector(".ql-editor"))?.textContent ?? "") + "\0";
 		},
 		insert: (element, text) => legacyInstance(element) ? insertLegacy(element, text) : pasteIntoComponent(element, text)
+	};
+	//#endregion
+	//#region src/editors/slate/index.ts
+	var rootSelector = "[data-slate-editor=\"true\"][contenteditable]";
+	var ignored = "[data-slate-placeholder], [data-slate-zero-width]";
+	var block = "[data-slate-node=\"element\"]:not([data-slate-inline]), [data-slate-object=\"block\"]";
+	function draftText(content) {
+		for (const element of content.querySelectorAll(ignored)) element.remove();
+		for (const element of content.querySelectorAll(block)) element.prepend("\n");
+		return content.textContent ?? "";
+	}
+	function contents(root) {
+		const range = root.ownerDocument.createRange();
+		range.selectNodeContents(root);
+		return range;
+	}
+	function offsetAt(root, node, offset) {
+		const prefix = contents(root);
+		prefix.setEnd(node, offset);
+		return draftText(prefix.cloneContents()).length;
+	}
+	function insert(root, text) {
+		const range = currentRange(root);
+		if (!range) return false;
+		const before = draftText(contents(root).cloneContents());
+		const start = offsetAt(root, range.startContainer, range.startOffset);
+		const end = offsetAt(root, range.endContainer, range.endOffset);
+		const expected = before.slice(0, start) + text + before.slice(end);
+		const dataTransfer = new DataTransfer();
+		dataTransfer.setData("text/plain", text);
+		const event = new InputEvent("beforeinput", {
+			bubbles: true,
+			composed: true,
+			cancelable: true,
+			inputType: "insertFromPaste",
+			dataTransfer,
+			targetRanges: [new StaticRange(range)]
+		});
+		root.dispatchEvent(event);
+		if (!event.defaultPrevented) return false;
+		return { applied() {
+			const current = currentRange(root);
+			return root.isConnected && current?.collapsed === true && draftText(contents(root).cloneContents()) === expected && offsetAt(root, current.startContainer, current.startOffset) === start + text.length;
+		} };
+	}
+	var adapter$1 = {
+		kind: "slate",
+		detect(element) {
+			const root = element.closest(rootSelector);
+			return root?.isContentEditable ? root : null;
+		},
+		snapshot: (root) => draftText(contents(root).cloneContents()),
+		insert
 	};
 	//#endregion
 	//#region src/editors/slack/index.ts
@@ -989,6 +1052,7 @@ misrepresented as being the original software.
 	//#endregion
 	//#region src/editors/registry.ts
 	var adapters = [
+		adapter$1,
 		{
 			kind: "slack",
 			detect(element) {
@@ -1003,12 +1067,12 @@ misrepresented as being the original software.
 				return insertSlack(element, text);
 			}
 		},
+		adapter$7,
 		adapter$6,
 		adapter$5,
-		adapter$4,
-		adapter$2,
 		adapter$3,
-		adapter$1
+		adapter$4,
+		adapter$2
 	];
 	function componentFor(element) {
 		for (const adapter of adapters) {
@@ -1068,10 +1132,6 @@ misrepresented as being the original software.
 	}
 	//#endregion
 	//#region src/editor.ts
-	function selectionFor(editor) {
-		const root = editor.getRootNode();
-		return "getSelection" in root && root.getSelection ? root.getSelection() : document.getSelection();
-	}
 	function textOffsetAt(root, node, offset) {
 		const prefix = root.ownerDocument.createRange();
 		prefix.selectNodeContents(root);
@@ -1104,12 +1164,6 @@ misrepresented as being the original software.
 		const length = node instanceof CharacterData ? node.length : node.childNodes.length;
 		if (node.nodeType !== boundary.nodeType || boundary.offset > length) return null;
 		return textOffsetAt(root, node, boundary.offset) === boundary.textOffset ? node : null;
-	}
-	function currentRange(editor) {
-		const selection = selectionFor(editor);
-		if (!selection?.rangeCount) return null;
-		const range = selection.getRangeAt(0);
-		return editor.contains(range.commonAncestorContainer) ? range : null;
 	}
 	var Bookmark = class {
 		value;
@@ -1472,6 +1526,7 @@ ime /IME;Input Method Editor/
 		let bookmark = null;
 		let registering = false;
 		let writing = false;
+		let pending = null;
 		let normalizing = false;
 		let normalizationId = 0;
 		const watchedContexts = /* @__PURE__ */ new WeakSet();
@@ -1497,7 +1552,8 @@ ime /IME;Input Method Editor/
 			});
 		}
 		function normalize(target) {
-			if (!componentFor(target)) return;
+			const component = componentFor(target);
+			if (!component || component.kind === "slate") return;
 			const id = ++normalizationId;
 			normalizing = true;
 			const normalized = () => {
@@ -1507,8 +1563,57 @@ ime /IME;Input Method Editor/
 			};
 			requestAnimationFrame(normalized);
 		}
-		function reconcileInput(target) {
+		function clearPending() {
+			pending?.stop();
+			pending = null;
+		}
+		function checkPending() {
+			const edit = pending;
+			if (!edit || editor !== edit.editor || !edit.insertion.applied()) return;
+			clearPending();
+			bookmark = new Bookmark(edit.editor);
+			if (!commit(edit.queued)) render();
+		}
+		function waitForInsertion(target, insertion) {
+			const observer = new MutationObserver(checkPending);
+			const checkSelection = () => queueMicrotask(checkPending);
+			observer.observe(target, {
+				childList: true,
+				characterData: true,
+				subtree: true,
+				attributes: true
+			});
+			target.ownerDocument.addEventListener("selectionchange", checkSelection);
+			const timeout = window.setTimeout(() => {
+				checkPending();
+				if (pending?.insertion !== insertion) return;
+				clearPending();
+				engine.reset();
+				bookmark = editor ? new Bookmark(editor) : null;
+				ui.message("変換結果の反映を確認できませんでした。");
+				render();
+			}, 1500);
+			pending = {
+				editor: target,
+				insertion,
+				queued: "",
+				stop() {
+					observer.disconnect();
+					target.ownerDocument.removeEventListener("selectionchange", checkSelection);
+					window.clearTimeout(timeout);
+				}
+			};
+			queueMicrotask(checkPending);
+		}
+		function reconcileInput(target, trusted = false) {
 			if (writing || editor !== target) return;
+			if (pending?.editor === target) {
+				if (!trusted || pending.insertion.applied()) {
+					queueMicrotask(checkPending);
+					return;
+				}
+				clearPending();
+			}
 			if (bookmark?.valid()) return;
 			engine.reset();
 			bookmark = null;
@@ -1527,6 +1632,10 @@ ime /IME;Input Method Editor/
 		}
 		function commit(text) {
 			if (!text) return true;
+			if (pending && pending.editor === editor) {
+				pending.queued += text;
+				return true;
+			}
 			if (normalizing && editor) bookmark = new Bookmark(editor);
 			writing = true;
 			let inserted = false;
@@ -1535,13 +1644,21 @@ ime /IME;Input Method Editor/
 			} finally {
 				writing = false;
 			}
+			if (typeof inserted !== "boolean" && editor) {
+				waitForInsertion(editor, inserted);
+				return true;
+			}
 			if (!inserted) ui.message("変換結果の挿入を確認できませんでした。");
 			bookmark = editor ? new Bookmark(editor) : null;
 			if (inserted && editor) normalize(editor);
-			return inserted;
+			return inserted === true;
 		}
 		function settle() {
-			if (engine.active) {
+			checkPending();
+			if (pending) {
+				if (pending.queued) ui.message("入力先が変わったため、未反映の入力を取り消しました。");
+				clearPending();
+			} else if (engine.active) {
 				commit(engine.finish());
 				save();
 			}
@@ -1719,7 +1836,7 @@ ime /IME;Input Method Editor/
 		}, true);
 		document.addEventListener("input", (e) => {
 			const target = findEditor(e.composedPath());
-			if (target) reconcileInput(target);
+			if (target) reconcileInput(target, e.isTrusted);
 		}, true);
 		document.addEventListener("pointerdown", (e) => {
 			if (ui.settings.hidden && findEditor(e.composedPath()) === editor) {
@@ -1750,7 +1867,8 @@ ime /IME;Input Method Editor/
 				bookmark = null;
 			}
 			watchNative(target);
-			if (bookmark && !bookmark.valid() && !normalizing) {
+			checkPending();
+			if (!pending && bookmark && !bookmark.valid() && !normalizing) {
 				engine.reset();
 				bookmark = null;
 			}
@@ -1767,8 +1885,9 @@ ime /IME;Input Method Editor/
 				"h"
 			].includes(e.key.toLowerCase()) ? "C-" + e.key.toLowerCase() : e.key;
 			if (e.altKey || e.metaKey || e.ctrlKey && !key.startsWith("C-")) {
-				if (engine.active) {
+				if (engine.active || pending) {
 					if (e.key.toLowerCase() === "z") {
+						clearPending();
 						engine.reset();
 						bookmark = null;
 					} else settle();
@@ -1777,6 +1896,11 @@ ime /IME;Input Method Editor/
 				return;
 			}
 			const result = engine.handle(key);
+			if (pending && !result.handled && key === "Enter") {
+				e.preventDefault();
+				e.stopImmediatePropagation();
+				return;
+			}
 			if (result.handled) {
 				e.preventDefault();
 				e.stopImmediatePropagation();

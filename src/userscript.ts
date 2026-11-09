@@ -5,6 +5,7 @@ import { starterDictionary } from './starter-dictionary.ts';
 import { UI } from './ui.ts';
 import { loadResourceDictionary, mergeDictionaries } from './resource.ts';
 import { componentFor, nativeContext } from './component.ts';
+import type { PendingInsertion } from './editors/types.ts';
 
 const SOURCE_KEY = 'skk.dictionary.v1';
 const USER_KEY = 'skk.user.v1';
@@ -29,6 +30,12 @@ async function main(): Promise<void> {
   let bookmark: Bookmark | null = null;
   let registering = false;
   let writing = false;
+  let pending: {
+    editor: Editor;
+    insertion: PendingInsertion;
+    queued: string;
+    stop(): void;
+  } | null = null;
   let normalizing = false;
   let normalizationId = 0;
   const watchedContexts = new WeakSet<EventTarget>();
@@ -57,7 +64,8 @@ async function main(): Promise<void> {
     });
   }
   function normalize(target: Editor): void {
-    if (!componentFor(target)) return;
+    const component = componentFor(target);
+    if (!component || component.kind === 'slate') return;
     const id = ++normalizationId;
     normalizing = true;
     const normalized = (): void => {
@@ -67,8 +75,57 @@ async function main(): Promise<void> {
     };
     requestAnimationFrame(normalized);
   }
-  function reconcileInput(target: Editor): void {
+  function clearPending(): void {
+    pending?.stop();
+    pending = null;
+  }
+  function checkPending(): void {
+    const edit = pending;
+    if (!edit || editor !== edit.editor || !edit.insertion.applied()) return;
+    clearPending();
+    bookmark = new Bookmark(edit.editor);
+    if (!commit(edit.queued)) render();
+  }
+  function waitForInsertion(target: Editor, insertion: PendingInsertion): void {
+    const observer = new MutationObserver(checkPending);
+    const checkSelection = (): void => queueMicrotask(checkPending);
+    observer.observe(target, {
+      childList: true,
+      characterData: true,
+      subtree: true,
+      attributes: true,
+    });
+    target.ownerDocument.addEventListener('selectionchange', checkSelection);
+    const timeout = window.setTimeout(() => {
+      checkPending();
+      if (pending?.insertion !== insertion) return;
+      clearPending();
+      engine.reset();
+      bookmark = editor ? new Bookmark(editor) : null;
+      ui.message('変換結果の反映を確認できませんでした。');
+      render();
+    }, 1500);
+    pending = {
+      editor: target,
+      insertion,
+      queued: '',
+      stop() {
+        observer.disconnect();
+        target.ownerDocument.removeEventListener('selectionchange', checkSelection);
+        window.clearTimeout(timeout);
+      },
+    };
+    queueMicrotask(checkPending);
+  }
+  function reconcileInput(target: Editor, trusted = false): void {
     if (writing || editor !== target) return;
+    if (pending?.editor === target) {
+      if (!trusted || pending.insertion.applied()) {
+        queueMicrotask(checkPending);
+        return;
+      }
+      clearPending();
+    }
     // A delayed notification can describe an edit already included in the
     // post-commit bookmark. Cancel only when the document or caret changed.
     if (bookmark?.valid()) return;
@@ -91,26 +148,38 @@ async function main(): Promise<void> {
   }
   function commit(text: string): boolean {
     if (!text) return true;
+    if (pending && pending.editor === editor) {
+      pending.queued += text;
+      return true;
+    }
     // Component paste handlers update their models immediately, but may rebuild
     // hidden inputs/selection on the next animation frame. During that own-edit
     // window take a fresh DOM snapshot rather than discarding pending romaji.
     if (normalizing && editor) bookmark = new Bookmark(editor);
     writing = true;
-    let inserted = false;
+    let inserted: boolean | PendingInsertion = false;
     try {
       inserted = bookmark?.insert(text) ?? false;
     } finally {
       writing = false;
+    }
+    if (typeof inserted !== 'boolean' && editor) {
+      waitForInsertion(editor, inserted);
+      return true;
     }
     // A single key can finish a candidate and start the next syllable.
     // The editor may consume or reject the candidate; keep that next syllable.
     if (!inserted) ui.message('変換結果の挿入を確認できませんでした。');
     bookmark = editor ? new Bookmark(editor) : null;
     if (inserted && editor) normalize(editor);
-    return inserted;
+    return inserted === true;
   }
   function settle(): void {
-    if (engine.active) {
+    checkPending();
+    if (pending) {
+      if (pending.queued) ui.message('入力先が変わったため、未反映の入力を取り消しました。');
+      clearPending();
+    } else if (engine.active) {
       commit(engine.finish());
       save();
     }
@@ -316,7 +385,7 @@ async function main(): Promise<void> {
     'input',
     (e) => {
       const target = findEditor(e.composedPath());
-      if (target) reconcileInput(target);
+      if (target) reconcileInput(target, e.isTrusted);
     },
     true,
   );
@@ -366,7 +435,8 @@ async function main(): Promise<void> {
         bookmark = null;
       }
       watchNative(target);
-      if (bookmark && !bookmark.valid() && !normalizing) {
+      checkPending();
+      if (!pending && bookmark && !bookmark.valid() && !normalizing) {
         engine.reset();
         bookmark = null;
       }
@@ -383,8 +453,9 @@ async function main(): Promise<void> {
           ? 'C-' + e.key.toLowerCase()
           : e.key;
       if (e.altKey || e.metaKey || (e.ctrlKey && !key.startsWith('C-'))) {
-        if (engine.active) {
+        if (engine.active || pending) {
           if (e.key.toLowerCase() === 'z') {
+            clearPending();
             engine.reset();
             bookmark = null;
           } else settle();
@@ -393,6 +464,13 @@ async function main(): Promise<void> {
         return;
       }
       const result = engine.handle(key);
+      // A chat composer can send on Enter. Keep it from sending a partial
+      // draft while the editor has accepted text but has not rendered it.
+      if (pending && !result.handled && key === 'Enter') {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        return;
+      }
       if (result.handled) {
         e.preventDefault();
         e.stopImmediatePropagation();

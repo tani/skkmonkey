@@ -12,6 +12,7 @@ const html = `<!doctype html><html lang="ja"><meta charset="utf-8"><title>SKK te
 <style>body{font:18px system-ui;margin:35px}textarea,input,[contenteditable]{display:block;width:500px;margin:16px;padding:12px;border:1px solid #aaa}textarea{height:100px}[contenteditable]{white-space:pre-wrap}</style>
 <h1>SKK Browser IME</h1><form><textarea id="text"></textarea><input id="input"><input id="password" type="password"><input id="readonly" readonly>
 <div id="rich" contenteditable="true"><b>prefix:</b> </div><div data-skk-disable><textarea id="optout"></textarea></div>
+<div id="slate" data-slate-editor="true" contenteditable="true" role="textbox" aria-label="Message #test"></div>
 <input id="controlled"><div id="shadowhost"></div><button type="submit">Send</button></form>
 <script>
 window.events=[];window.submits=0;
@@ -257,6 +258,71 @@ try {
       );
       await typeKeys('arezu');
       assert.equal(await page.locator('#rich').textContent(), '反映されず');
+
+      // Exercise the Discord-style Slate shape and delay DOM and caret
+      // acknowledgment separately. Later kana must wait and insert once.
+      for (const abandon of [false, true]) {
+        await reset('#slate');
+        await page.evaluate(() => {
+          const root = document.querySelector('#slate');
+          const selection = document.getSelection();
+          const block = document.createElement('div');
+          block.dataset.slateNode = 'element';
+          const leaf = document.createElement('span');
+          leaf.dataset.slateZeroWidth = 'n';
+          leaf.textContent = '\uFEFF';
+          block.append(leaf);
+          root.replaceChildren(block);
+          selection.collapse(leaf.firstChild, 1);
+          window.slateWrites = [];
+          window.slateEnters = 0;
+          root.onkeydown = (event) => {
+            if (event.key === 'Enter') window.slateEnters++;
+          };
+          root.onbeforeinput = (event) => {
+            if (event.inputType !== 'insertFromPaste') return;
+            const text = event.dataTransfer.getData('text/plain');
+            const [range] = event.getTargetRanges();
+            if (!range || !root.contains(range.startContainer)) return;
+            event.preventDefault();
+            window.slateWrites.push(text);
+            if (window.slateWrites.length === 1) {
+              window.applySlate = () => {
+                const value = document.createElement('span');
+                value.dataset.slateString = 'true';
+                value.textContent = text;
+                block.replaceChildren(value);
+                selection.collapse(value.firstChild, 0);
+                root.dispatchEvent(new InputEvent('input', { bubbles: true }));
+                window.moveSlateCaret = () => selection.collapse(value.firstChild, text.length);
+              };
+            } else {
+              block.firstChild.firstChild.appendData(text);
+              selection.collapse(block.firstChild.firstChild, block.textContent.length);
+            }
+          };
+        });
+        await typeKeys('Hannei ');
+        await typeKeys('sarezu');
+        await page.keyboard.press('Enter');
+        assert.deepEqual(await page.evaluate(() => window.slateWrites), ['反映']);
+        assert.equal(await page.evaluate(() => window.slateEnters), 0);
+        await page.evaluate(() => window.applySlate());
+        await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(resolve)));
+        assert.deepEqual(await page.evaluate(() => window.slateWrites), ['反映']);
+        if (abandon) {
+          await page.locator('#input').focus();
+          await page.evaluate(() => window.moveSlateCaret());
+          await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(resolve)));
+          assert.equal(await page.locator('#slate').textContent(), '反映');
+        } else {
+          await page.evaluate(() => window.moveSlateCaret());
+          await page.waitForFunction(
+            () => document.querySelector('#slate').textContent === '反映されず',
+          );
+          assert.deepEqual(await page.evaluate(() => window.slateWrites), ['反映', 'されず']);
+        }
+      }
 
       await page.evaluate(() => localStorage.removeItem('skk.dictionary.v1'));
       await load();

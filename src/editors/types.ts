@@ -6,12 +6,16 @@ export type ComponentKind =
   | 'prosemirror'
   | 'tiptap'
   | 'quill'
-  | 'slack';
+  | 'slack'
+  | 'slate';
+export interface PendingInsertion {
+  applied(): boolean;
+}
 export interface EditorAdapter {
   readonly kind: ComponentKind;
   detect(element: HTMLElement): HTMLElement | null;
   snapshot(root: HTMLElement): string;
-  insert(element: HTMLElement, text: string): boolean;
+  insert(element: HTMLElement, text: string): boolean | PendingInsertion;
 }
 export interface Component {
   kind: ComponentKind;
