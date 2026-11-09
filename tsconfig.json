@@ -11,5 +11,11 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["src/**/*.ts", "test/*.ts", "vite.config.ts"]
+  "include": [
+    "src/**/*.ts",
+    "test/*.ts",
+    "scripts/*.ts",
+    "test/editors/shared/scenarios.ts",
+    "vite.config.ts"
+  ]
 }

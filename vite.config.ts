@@ -17,7 +17,13 @@ export default defineConfig({
   },
   test: { include: ['test/*.test.ts'], environment: 'node', restoreMocks: true },
   lint: {
-    ignorePatterns: ['dist/**', 'test-results/**', 'test/editors/**'],
+    ignorePatterns: [
+      'dist/**',
+      'test-results/**',
+      'test/editors/*/fixture.ts',
+      'test/editors/fixture.ts',
+      'test/editors/codemirror5.d.ts',
+    ],
     options: { typeAware: true, typeCheck: true },
   },
   fmt: {

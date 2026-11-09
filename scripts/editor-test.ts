@@ -1,15 +1,32 @@
-import { runScenarios } from '../test/editors/shared/scenarios.mjs';
+import assert from 'node:assert/strict';
+import { runScenarios, type EditContextHost } from '../test/editors/shared/scenarios.ts';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'vite-plus';
-import { chromium, firefox } from 'playwright';
+import { chromium, firefox, type BrowserType, type Page } from 'playwright';
+
+interface EditorProfile {
+  editor: string;
+  name: string;
+  fixtures: string[];
+  nativeEditContext?: boolean;
+}
+
+interface TextUpdateEvent extends Event {
+  text: string;
+  updateRangeStart: number;
+  updateRangeEnd: number;
+  selectionStart: number;
+}
 
 const profilePath = process.env.SKK_EDITOR_PROFILE;
 const profile = profilePath
-  ? JSON.parse(await readFile(new URL(profilePath, new URL('../', import.meta.url)), 'utf8'))
+  ? (JSON.parse(
+      await readFile(new URL(profilePath, new URL('../', import.meta.url)), 'utf8'),
+    ) as EditorProfile)
   : null;
 const profileDir = profilePath
   ? fileURLToPath(new URL('.', new URL(profilePath, new URL('../', import.meta.url))))
@@ -114,11 +131,12 @@ const server = createServer(async (req, res) => {
 });
 server.listen(0, '127.0.0.1');
 await once(server, 'listening');
-const url = `http://127.0.0.1:${server.address().port}/`;
+const address = server.address();
+assert.ok(address && typeof address !== 'string');
+const url = `http://127.0.0.1:${address.port}/`;
 
 try {
-  /** @type {[string, import('playwright').BrowserType][]} */
-  const browsers = [
+  const browsers: [string, BrowserType][] = [
     ['chromium', chromium],
     ['firefox', firefox],
   ];
@@ -131,15 +149,16 @@ try {
       timeout: 15000,
       ...(executablePath ? { executablePath } : {}),
     });
-    let page;
+    let page: Page | undefined;
     try {
       page = await browser.newPage({ viewport: { width: 1000, height: 900 } });
       page.setDefaultTimeout(10000);
-      const errors = [];
+      const errors: string[] = [];
       page.on('pageerror', (error) => errors.push(String(error)));
       await page.addInitScript(() => {
-        const store = new Map();
-        window.GM_getValue = (key, fallback) => store.get(key) ?? fallback;
+        const store = new Map<string, unknown>();
+        window.GM_getValue = (key, fallback) =>
+          (store.get(key) as typeof fallback | undefined) ?? fallback;
         window.GM_setValue = (key, value) => {
           store.set(key, value);
         };
@@ -162,38 +181,43 @@ try {
           document.addEventListener(
             type,
             (e) => {
-              const target = e.target;
+              const target = e.target instanceof HTMLElement ? e.target : null;
+              const context = (target as EditContextHost | null)?.editContext;
               window.debugEvents.push({
                 type,
-                key: e.key,
-                data: e.clipboardData?.getData('text/plain') ?? e.data,
-                value: target?.value,
+                key: e instanceof KeyboardEvent ? e.key : undefined,
+                data:
+                  e instanceof ClipboardEvent
+                    ? e.clipboardData?.getData('text/plain')
+                    : e instanceof InputEvent
+                      ? e.data
+                      : undefined,
+                value: target instanceof HTMLTextAreaElement ? target.value : undefined,
                 model: window.fixture['monaco-native']?.get() ?? window.fixture.monaco?.get(),
                 target: target?.className,
-                context: target?.editContext
-                  ? [
-                      target.editContext.text,
-                      target.editContext.selectionStart,
-                      target.editContext.selectionEnd,
-                    ]
+                context: context
+                  ? [context.text, context.selectionStart, context.selectionEnd]
                   : undefined,
               });
             },
             true,
           );
-        const context = document.querySelector('#monaco-native .native-edit-context')?.editContext;
-        context?.addEventListener('textupdate', (e) =>
+        const context = document.querySelector<EditContextHost>(
+          '#monaco-native .native-edit-context',
+        )?.editContext;
+        context?.addEventListener('textupdate', (e) => {
+          const update = e as TextUpdateEvent;
           window.debugEvents.push({
             type: 'textupdate',
-            trusted: e.isTrusted,
-            text: e.text,
-            from: e.updateRangeStart,
-            to: e.updateRangeEnd,
-            selection: e.selectionStart,
-            model: window.fixture['monaco-native'].get(),
+            trusted: update.isTrusted,
+            text: update.text,
+            from: update.updateRangeStart,
+            to: update.updateRangeEnd,
+            selection: update.selectionStart,
+            model: window.fixture['monaco-native']!.get(),
             context: [context.text, context.selectionStart],
-          }),
-        );
+          });
+        });
       });
       await page.addScriptTag({ content: script });
       await page.waitForFunction(() => window.skkUI);

@@ -1,5 +1,5 @@
 import { readFile, readdir, writeFile, mkdir } from 'node:fs/promises';
-import { spawn } from 'node:child_process';
+import { spawn, type SpawnOptions } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const root = new URL('../', import.meta.url);
@@ -11,7 +11,7 @@ for (const editor of (await readdir(new URL('test/editors/', root), { withFileTy
   if (editor === 'shared') continue;
   const paths = JSON.parse(
     await readFile(new URL(`test/editors/${editor}/profiles.json`, root), 'utf8'),
-  );
+  ) as string[];
   for (const path of paths)
     profiles.push({
       id: `${editor}/${path.split('/')[1]}`,
@@ -32,8 +32,8 @@ const selected = selectedIds.length
 if (args.includes('--list')) {
   for (const profile of selected) console.log(profile.id);
 } else {
-  const run = (command, args, options = {}) =>
-    new Promise((resolve, reject) => {
+  const run = (command: string, args: string[], options: SpawnOptions = {}) =>
+    new Promise<number>((resolve, reject) => {
       const child = spawn(command, args, {
         cwd: fileURLToPath(root),
         stdio: 'inherit',
@@ -53,10 +53,12 @@ if (args.includes('--list')) {
         cwd: fileURLToPath(dir),
       });
     if (!code)
-      code = await run(process.execPath, ['scripts/editor-test.mjs'], {
+      code = await run('vpx', ['scripts/editor-test.ts'], {
         env: { ...process.env, SKK_EDITOR_PROFILE: profile.path },
       });
-    const manifest = JSON.parse(await readFile(new URL('package.json', dir), 'utf8'));
+    const manifest = JSON.parse(await readFile(new URL('package.json', dir), 'utf8')) as {
+      dependencies: Record<string, string>;
+    };
     results.push({
       profile: profile.id,
       browsers: process.env.SKK_TEST_BROWSERS ?? 'chromium,firefox',

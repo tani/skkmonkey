@@ -38,7 +38,7 @@ misrepresented as being the original software.
 
 */
 (function() {
-	//#region src/dictionary.ts
+	// src/dictionary.ts
 	function parseSkk(text) {
 		const entries = /* @__PURE__ */ new Map();
 		for (const line of text.replace(/^\uFEFF/, "").split(/\r?\n/)) {
@@ -102,8 +102,7 @@ misrepresented as being the original software.
 			return ";; SKK userscript personal dictionary (UTF-8)\n" + Object.entries(this.user).map(([key, values]) => `${key} /${values.join("/")}/`).join("\n") + "\n";
 		}
 	};
-	//#endregion
-	//#region src/kana-table.ts
+	// src/kana-table.ts
 	var kanaTable = [
 		["!", ["！", ""]],
 		[",", ["、", ""]],
@@ -348,8 +347,7 @@ misrepresented as being the original software.
 		["zyu", ["じゅ", ""]],
 		["zz", ["っ", "z"]]
 	];
-	//#endregion
-	//#region src/romaji.ts
+	// src/romaji.ts
 	var rules = new Map(kanaTable);
 	var prefixes = new Set(kanaTable.flatMap(([key]) => Array.from({ length: key.length - 1 }, (_, i) => key.slice(0, i + 1))));
 	var Romaji = class {
@@ -387,8 +385,7 @@ misrepresented as being the original software.
 	function fullwidth(text) {
 		return text.replace(/[!-~ ]/g, (c) => c === " " ? "　" : String.fromCharCode(c.charCodeAt(0) + 65248));
 	}
-	//#endregion
-	//#region src/okuri.ts
+	// src/okuri.ts
 	var okuriTable = {
 		ぁ: "x",
 		あ: "a",
@@ -478,8 +475,7 @@ misrepresented as being the original software.
 		if (okuri === "っ") return "t";
 		return okuriTable[okuri.match(/[^っ]/u)?.[0] ?? ""] ?? fallback;
 	}
-	//#endregion
-	//#region src/engine.ts
+	// src/engine.ts
 	var Engine = class {
 		mode = "ascii";
 		phase = "direct";
@@ -692,14 +688,12 @@ misrepresented as being the original software.
 			return true;
 		}
 	};
-	//#endregion
-	//#region src/editors/shared/edit-context.ts
+	// src/editors/shared/edit-context.ts
 	function nativeContext(element) {
 		const context = element.editContext;
 		return context && typeof context.text === "string" ? context : null;
 	}
-	//#endregion
-	//#region src/editors/monaco/edit-context.ts
+	// src/editors/monaco/edit-context.ts
 	function typeIntoEditContext(element, text) {
 		const context = nativeContext(element);
 		if (!context) return false;
@@ -731,8 +725,7 @@ misrepresented as being the original software.
 		}
 		return true;
 	}
-	//#endregion
-	//#region src/editors/native/input.ts
+	// src/editors/native/input.ts
 	function insertInput(editor, text) {
 		const start = editor.selectionStart ?? 0;
 		const end = editor.selectionEnd ?? start;
@@ -748,13 +741,11 @@ misrepresented as being the original software.
 		}));
 		return true;
 	}
-	//#endregion
-	//#region src/editors/monaco/textarea.ts
+	// src/editors/monaco/textarea.ts
 	function insertTextarea(element, text) {
 		return element instanceof HTMLTextAreaElement && insertInput(element, text);
 	}
-	//#endregion
-	//#region src/editors/monaco/index.ts
+	// src/editors/monaco/index.ts
 	var adapter$7 = {
 		kind: "monaco",
 		detect(element) {
@@ -766,8 +757,7 @@ misrepresented as being the original software.
 		},
 		insert: (element, text) => nativeContext(element) ? typeIntoEditContext(element, text) : insertTextarea(element, text)
 	};
-	//#endregion
-	//#region src/editors/shared/selection.ts
+	// src/editors/shared/selection.ts
 	function selectionFor(editor) {
 		const root = editor.getRootNode();
 		return "getSelection" in root && root.getSelection ? root.getSelection() : editor.ownerDocument.getSelection();
@@ -840,8 +830,7 @@ misrepresented as being the original software.
 		restore();
 		requestAnimationFrame(restore);
 	}
-	//#endregion
-	//#region src/editors/shared/clipboard.ts
+	// src/editors/shared/clipboard.ts
 	function pasteIntoComponent(element, text) {
 		element.ownerDocument.dispatchEvent(new Event("selectionchange"));
 		const selection = captureTextSelection(element);
@@ -857,8 +846,7 @@ misrepresented as being the original software.
 		if (paste.defaultPrevented) stabilizeInsertedCaret(selection, text.length);
 		return paste.defaultPrevented;
 	}
-	//#endregion
-	//#region src/editors/codemirror5/index.ts
+	// src/editors/codemirror5/index.ts
 	var adapter$6 = {
 		kind: "codemirror5",
 		detect(element) {
@@ -870,8 +858,7 @@ misrepresented as being the original software.
 		},
 		insert: pasteIntoComponent
 	};
-	//#endregion
-	//#region src/editors/codemirror6/edit-context.ts
+	// src/editors/codemirror6/edit-context.ts
 	function insertEditContext(element, text) {
 		const context = nativeContext(element);
 		if (!context) return false;
@@ -894,8 +881,7 @@ misrepresented as being the original software.
 		}
 		return true;
 	}
-	//#endregion
-	//#region src/editors/codemirror6/index.ts
+	// src/editors/codemirror6/index.ts
 	var adapter$5 = {
 		kind: "codemirror6",
 		detect(element) {
@@ -907,8 +893,7 @@ misrepresented as being the original software.
 		},
 		insert: (element, text) => nativeContext(element) ? insertEditContext(element, text) : pasteIntoComponent(element, text)
 	};
-	//#endregion
-	//#region src/editors/prosemirror/index.ts
+	// src/editors/prosemirror/index.ts
 	var adapter$4 = {
 		kind: "prosemirror",
 		detect(element) {
@@ -919,15 +904,13 @@ misrepresented as being the original software.
 		},
 		insert: pasteIntoComponent
 	};
-	//#endregion
-	//#region src/editors/tiptap/index.ts
+	// src/editors/tiptap/index.ts
 	var adapter$3 = {
 		...adapter$4,
 		kind: "tiptap",
 		detect: (element) => element.closest(".tiptap.ProseMirror")
 	};
-	//#endregion
-	//#region src/editors/quill/v1.ts
+	// src/editors/quill/v1.ts
 	function legacyInstance(element) {
 		const instance = element.closest(".ql-container")?.__quill;
 		return instance?.root === element && typeof instance.updateContents === "function" && typeof instance.getContents === "function" && typeof instance.history?.cutoff === "function" ? instance : null;
@@ -944,8 +927,7 @@ misrepresented as being the original software.
 		quill.history.cutoff();
 		return true;
 	}
-	//#endregion
-	//#region src/editors/quill/index.ts
+	// src/editors/quill/index.ts
 	var adapter$2 = {
 		kind: "quill",
 		detect(element) {
@@ -957,8 +939,7 @@ misrepresented as being the original software.
 		},
 		insert: (element, text) => legacyInstance(element) ? insertLegacy(element, text) : pasteIntoComponent(element, text)
 	};
-	//#endregion
-	//#region src/editors/slate/index.ts
+	// src/editors/slate/index.ts
 	var rootSelector = "[data-slate-editor=\"true\"][contenteditable]";
 	var ignored = "[data-slate-placeholder], [data-slate-zero-width]";
 	var block = "[data-slate-node=\"element\"]:not([data-slate-inline]), [data-slate-object=\"block\"]";
@@ -1010,8 +991,7 @@ misrepresented as being the original software.
 		snapshot: (root) => draftText(contents(root).cloneContents()),
 		insert
 	};
-	//#endregion
-	//#region src/editors/slack/index.ts
+	// src/editors/slack/index.ts
 	function isSlackComposer(element) {
 		if (!element.isContentEditable) return false;
 		const role = element.getAttribute("role");
@@ -1049,8 +1029,7 @@ misrepresented as being the original software.
 		stabilizeInsertedCaret(bookmark, text.length);
 		return true;
 	}
-	//#endregion
-	//#region src/editors/registry.ts
+	// src/editors/registry.ts
 	var adapters = [
 		adapter$1,
 		{
@@ -1089,8 +1068,7 @@ misrepresented as being the original software.
 		const component = componentFor(element);
 		return component ? component.adapter.snapshot(component.root) : "";
 	}
-	//#endregion
-	//#region src/editors/native/contenteditable.ts
+	// src/editors/native/contenteditable.ts
 	function insertContenteditable(editor, text, range, selection) {
 		selection?.removeAllRanges();
 		selection?.addRange(range);
@@ -1110,8 +1088,7 @@ misrepresented as being the original software.
 		}));
 		return true;
 	}
-	//#endregion
-	//#region src/editors/native/index.ts
+	// src/editors/native/index.ts
 	function findEditor(path) {
 		if (path.some((item) => item instanceof HTMLElement && item.matches("[data-skk-disable]"))) return null;
 		for (const item of path) {
@@ -1130,8 +1107,7 @@ misrepresented as being the original software.
 		}
 		return null;
 	}
-	//#endregion
-	//#region src/editor.ts
+	// src/editor.ts
 	function textOffsetAt(root, node, offset) {
 		const prefix = root.ownerDocument.createRange();
 		prefix.selectNodeContents(root);
@@ -1258,8 +1234,7 @@ misrepresented as being the original software.
 			return range ? insertContenteditable(editor, text, range, selectionFor(editor)) : false;
 		}
 	};
-	//#endregion
-	//#region src/starter-dictionary.ts
+	// src/starter-dictionary.ts
 	var starterDictionary = `;; Original starter entries, MIT license, UTF-8
 にほん /日本/二本/
 にほんご /日本語/
@@ -1333,8 +1308,7 @@ misrepresented as being the original software.
 skk /SKK;Simple Kana to Kanji conversion/
 ime /IME;Input Method Editor/
 `;
-	//#endregion
-	//#region src/ui.ts
+	// src/ui.ts
 	var labels = {
 		ascii: "A",
 		hiragana: "あ",
@@ -1491,8 +1465,7 @@ ime /IME;Input Method Editor/
 			this.settings.hidden = true;
 		}
 	};
-	//#endregion
-	//#region src/resource.ts
+	// src/resource.ts
 	async function loadResourceDictionary(getResourceURL = (name, isBlobUrl) => GM_getResourceURL(name, isBlobUrl)) {
 		try {
 			const url = await getResourceURL("SKK_JISYO_L", false);
@@ -1523,8 +1496,7 @@ ime /IME;Input Method Editor/
 		}
 		return base;
 	}
-	//#endregion
-	//#region src/userscript.ts
+	// src/userscript.ts
 	var SOURCE_KEY = "skk.dictionary.v1";
 	var USER_KEY = "skk.user.v1";
 	async function main() {
@@ -1962,5 +1934,4 @@ ime /IME;Input Method Editor/
 		document.addEventListener("scroll", render, true);
 	}
 	main().catch((error) => console.error("SKK userscript initialization failed:", error));
-	//#endregion
 })();

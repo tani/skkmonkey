@@ -1,8 +1,25 @@
 import assert from 'node:assert/strict';
 import { readFile, mkdir } from 'node:fs/promises';
-import { chromium, firefox } from 'playwright';
+import { chromium, firefox, type BrowserType } from 'playwright';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
+
+declare global {
+  interface Window {
+    GM_getValue: typeof GM_getValue;
+    GM_setValue: typeof GM_setValue;
+    GM_registerMenuCommand: typeof GM_registerMenuCommand;
+    GM_getResourceURL: typeof GM_getResourceURL;
+    __menus: Record<string, () => unknown>;
+    __skkUI: ShadowRoot;
+    submits: number;
+    controlledChanged: boolean;
+    slateWrites: string[];
+    slateEnters: number;
+    applySlate: () => void;
+    moveSlateCaret: () => void;
+  }
+}
 
 const upstreamResource = process.env.SKK_TEST_DICTIONARY_PATH
   ? (await readFile(process.env.SKK_TEST_DICTIONARY_PATH)).toString('base64')
@@ -29,12 +46,13 @@ const server = createServer((req, res) => {
 });
 server.listen(0, '127.0.0.1');
 await once(server, 'listening');
-const url = `http://127.0.0.1:${server.address().port}/`;
+const address = server.address();
+assert.ok(address && typeof address !== 'string');
+const url = `http://127.0.0.1:${address.port}/`;
 await mkdir(new URL('../test-results/', import.meta.url), { recursive: true });
 
 try {
-  /** @type {[string, import('playwright').BrowserType][]} */
-  const browsers = [
+  const browsers: [string, BrowserType][] = [
     ['chromium', chromium],
     ['firefox', firefox],
   ];
@@ -51,10 +69,10 @@ try {
       const page = await browser.newPage({ viewport: { width: 1000, height: 850 } });
       page.setDefaultTimeout(8000);
       page.setDefaultNavigationTimeout(8000);
-      const errors = [];
+      const errors: string[] = [];
       page.on('pageerror', (e) => errors.push(String(e)));
       await page.addInitScript((upstreamResource) => {
-        window.GM_getResourceURL = (name, _blob) => {
+        window.GM_getResourceURL = (name) => {
           if (new URLSearchParams(location.search).get('resource') === 'full')
             return 'data:text/plain;base64,' + upstreamResource;
           if (name !== 'SKK_JISYO_L') throw new Error('Unknown resource');
@@ -68,7 +86,7 @@ try {
         window.__menus = {};
         window.GM_getValue = (key, fallback) => {
           const v = localStorage.getItem(key);
-          return v === null ? fallback : JSON.parse(v);
+          return v === null ? fallback : (JSON.parse(v) as typeof fallback);
         };
         window.GM_setValue = (key, value) => {
           localStorage.setItem(key, JSON.stringify(value));
@@ -96,11 +114,11 @@ try {
         await page.locator(selector).focus();
         await page.keyboard.press('Control+j');
       }
-      async function typeKeys(text) {
+      async function typeKeys(text: string) {
         await page.keyboard.type(text);
       }
       async function uiText() {
-        return page.evaluate(() => window.__skkUI.textContent);
+        return page.evaluate(() => window.__skkUI.textContent ?? '');
       }
       await load();
       console.log(`${name}: loaded`);
@@ -126,7 +144,7 @@ try {
       await typeKeys('a');
       assert.equal(await page.locator('#text').inputValue(), 'か');
       const burst = await page.evaluate(() => {
-        const field = document.querySelector('#text');
+        const field = document.querySelector<HTMLTextAreaElement>('#text')!;
         field.value = '';
         let measurements = 0;
         const measure = field.getBoundingClientRect.bind(field);
@@ -143,7 +161,7 @@ try {
             values.push(field.value);
           }
         } finally {
-          delete field.getBoundingClientRect;
+          Reflect.deleteProperty(field, 'getBoundingClientRect');
         }
         return { values, measurements };
       });
@@ -170,7 +188,7 @@ try {
       assert.equal(await panel.isVisible(), true);
       assert.match(await uiText(), /▼漢字/);
       const compact = await panel.boundingBox();
-      assert.ok(compact.width <= 320 && compact.height <= 60, JSON.stringify(compact));
+      assert.ok(compact && compact.width <= 320 && compact.height <= 60, JSON.stringify(compact));
       await page.locator('#input').focus();
       await panel.waitFor({ state: 'hidden' });
       await reset();
@@ -232,7 +250,9 @@ try {
       assert.equal(await page.locator('#text').inputValue(), '');
 
       await reset('#input', 'alpha OLD omega');
-      await page.evaluate(() => document.querySelector('#input').setSelectionRange(6, 9));
+      await page.evaluate(() =>
+        document.querySelector<HTMLInputElement>('#input')!.setSelectionRange(6, 9),
+      );
       await typeKeys('Nihon ');
       await page.keyboard.press('Enter');
       assert.equal(await page.locator('#input').inputValue(), 'alpha 日本 omega');
@@ -248,10 +268,10 @@ try {
       await page.keyboard.press('Control+j');
       await typeKeys('Nihon ');
       await page.keyboard.press('Enter');
-      assert.match(await page.locator('#rich').textContent(), /prefix: 日本$/);
+      assert.match((await page.locator('#rich').textContent()) ?? '', /prefix: 日本$/);
       assert.equal(await page.locator('#rich b').textContent(), 'prefix:');
       await page.keyboard.press('Control+z');
-      assert.doesNotMatch(await page.locator('#rich').textContent(), /日本/);
+      assert.doesNotMatch((await page.locator('#rich').textContent()) ?? '', /日本/);
       // A host editor can acknowledge a commit after the next consonant arrives.
       // A redraw can also replace the text node while preserving the caret.
       await page.evaluate(() =>
@@ -265,16 +285,16 @@ try {
         await typeKeys('s'); // Also implicitly confirms the candidate when Enter was omitted.
         assert.equal(await page.locator('#rich').textContent(), '反映');
         await page.evaluate((change) => {
-          const rich = document.querySelector('#rich');
-          const selection = document.getSelection();
+          const rich = document.querySelector<HTMLElement>('#rich')!;
+          const selection = document.getSelection()!;
           if (change === 'redraw' || change === 'both') {
             rich.replaceChildren(document.createTextNode(rich.textContent));
-            selection.collapse(rich.firstChild, rich.textContent.length);
+            selection.collapse(rich.firstChild!, rich.textContent!.length);
           } else if (change === 'external') {
             rich.textContent = '外部';
-            selection.collapse(rich.firstChild, rich.textContent.length);
+            selection.collapse(rich.firstChild!, rich.textContent!.length);
           } else if (change === 'move') {
-            selection.collapse(rich.firstChild, 0);
+            selection.collapse(rich.firstChild!, 0);
           }
           if (change === 'notify' || change === 'both' || change === 'external')
             rich.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText' }));
@@ -288,13 +308,13 @@ try {
       // insertion. Its synthetic composition events must not disable SKK.
       await reset('#rich');
       await page.evaluate(() => {
-        const rich = document.querySelector('#rich');
+        const rich = document.querySelector<HTMLElement>('#rich')!;
         rich.addEventListener(
           'beforeinput',
           (event) => {
             event.preventDefault();
-            rich.textContent = event.data;
-            document.getSelection().collapse(rich.firstChild, rich.textContent.length);
+            rich.textContent = (event as InputEvent).data;
+            document.getSelection()!.collapse(rich.firstChild!, rich.textContent!.length);
             setTimeout(() => {
               rich.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
               rich.dataset.compositionDispatched = 'true';
@@ -307,7 +327,7 @@ try {
       assert.match(await uiText(), /▼反映/);
       await typeKeys('s');
       await page.waitForFunction(
-        () => document.querySelector('#rich').dataset.compositionDispatched,
+        () => document.querySelector<HTMLElement>('#rich')!.dataset.compositionDispatched,
       );
       await typeKeys('arezu');
       assert.equal(await page.locator('#rich').textContent(), '反映されず');
@@ -317,8 +337,8 @@ try {
       for (const abandon of [false, true]) {
         await reset('#slate');
         await page.evaluate(() => {
-          const root = document.querySelector('#slate');
-          const selection = document.getSelection();
+          const root = document.querySelector<HTMLElement>('#slate')!;
+          const selection = document.getSelection()!;
           const block = document.createElement('div');
           block.dataset.slateNode = 'element';
           const leaf = document.createElement('span');
@@ -326,15 +346,17 @@ try {
           leaf.textContent = '\uFEFF';
           block.append(leaf);
           root.replaceChildren(block);
-          selection.collapse(leaf.firstChild, 1);
+          selection.collapse(leaf.firstChild!, 1);
           window.slateWrites = [];
           window.slateEnters = 0;
           root.onkeydown = (event) => {
             if (event.key === 'Enter') window.slateEnters++;
           };
           root.onbeforeinput = (event) => {
+            if (!(event instanceof InputEvent)) return;
             if (event.inputType !== 'insertFromPaste') return;
-            const text = event.dataTransfer.getData('text/plain');
+            const text = event.dataTransfer?.getData('text/plain');
+            if (!text) return;
             const [range] = event.getTargetRanges();
             if (!range || !root.contains(range.startContainer)) return;
             event.preventDefault();
@@ -345,13 +367,14 @@ try {
                 value.dataset.slateString = 'true';
                 value.textContent = text;
                 block.replaceChildren(value);
-                selection.collapse(value.firstChild, 0);
+                selection.collapse(value.firstChild!, 0);
                 root.dispatchEvent(new InputEvent('input', { bubbles: true }));
-                window.moveSlateCaret = () => selection.collapse(value.firstChild, text.length);
+                window.moveSlateCaret = () => selection.collapse(value.firstChild!, text.length);
               };
             } else {
-              block.firstChild.firstChild.appendData(text);
-              selection.collapse(block.firstChild.firstChild, block.textContent.length);
+              const leafText = block.firstChild!.firstChild as Text;
+              leafText.appendData(text);
+              selection.collapse(leafText, leafText.length);
             }
           };
         });
@@ -371,7 +394,7 @@ try {
         } else {
           await page.evaluate(() => window.moveSlateCaret());
           await page.waitForFunction(
-            () => document.querySelector('#slate').textContent === '反映されず',
+            () => document.querySelector<HTMLElement>('#slate')!.textContent === '反映されず',
           );
           assert.deepEqual(await page.evaluate(() => window.slateWrites), ['反映', 'されず']);
         }
@@ -409,7 +432,7 @@ try {
       await reset();
       await typeKeys('Nihon');
       await page.evaluate(() => {
-        const t = document.querySelector('#text');
+        const t = document.querySelector<HTMLTextAreaElement>('#text')!;
         t.value = 'external';
         t.setSelectionRange(8, 8);
       });
@@ -434,9 +457,11 @@ try {
 
       await reset();
       await page.evaluate(() =>
-        document.querySelector('#text').addEventListener('beforeinput', (e) => {
-          if (e.data === 'あ') e.preventDefault();
-        }),
+        document
+          .querySelector<HTMLTextAreaElement>('#text')!
+          .addEventListener('beforeinput', (e) => {
+            if (e instanceof InputEvent && e.data === 'あ') e.preventDefault();
+          }),
       );
       await typeKeys('a');
       assert.equal(await page.locator('#text').inputValue(), '');
@@ -450,9 +475,11 @@ try {
       await page.getByRole('textbox', { name: '登録する単語' }).fill('道');
       await page.getByRole('button', { name: '登録', exact: true }).click();
       assert.equal(await page.locator('#text').inputValue(), '道');
-      await page.waitForFunction(
-        () => JSON.parse(localStorage.getItem('skk.user.v1'))['みち'][0] === '道',
-      );
+      await page.waitForFunction(() => {
+        const stored = localStorage.getItem('skk.user.v1');
+        const dictionary = stored ? (JSON.parse(stored) as Record<string, string[]>) : {};
+        return dictionary['みち']?.[0] === '道';
+      });
 
       await load();
       await reset();
@@ -465,7 +492,7 @@ try {
       await page.keyboard.press('Enter');
 
       // Import a local UTF-8 dictionary through the actual settings UI.
-      await page.evaluate(() => window.__menus['SKK: 辞書設定 / Dictionary settings']());
+      await page.evaluate(() => window.__menus['SKK: 辞書設定 / Dictionary settings']!());
       await page.getByLabel('SKK 辞書ファイル').setInputFiles({
         name: 'SKK-JISYO.test',
         mimeType: 'text/plain',
@@ -476,7 +503,7 @@ try {
           'utf8',
         ),
       });
-      await page.waitForFunction(() => window.__skkUI.textContent.includes('3 見出しを保存'));
+      await page.waitForFunction(() => window.__skkUI.textContent?.includes('3 見出しを保存'));
       await page.getByRole('button', { name: '閉じる', exact: true }).click();
       for (const text of ['YoI', 'YOI']) {
         await reset();
@@ -501,7 +528,11 @@ try {
       await page.keyboard.press('Space');
       const small = await panel.boundingBox();
       assert.ok(
-        small.width <= 264 && small.height <= 60 && small.x >= 8 && small.x + small.width <= 272,
+        small &&
+          small.width <= 264 &&
+          small.height <= 60 &&
+          small.x >= 8 &&
+          small.x + small.width <= 272,
         JSON.stringify(small),
       );
       await page.keyboard.press('Space');
@@ -523,14 +554,14 @@ try {
       await typeKeys('Jisho ');
       assert.match(await uiText(), /▼辞書/);
       await page.keyboard.press('Enter');
-      await page.evaluate(() => window.__menus['SKK: 辞書設定 / Dictionary settings']());
+      await page.evaluate(() => window.__menus['SKK: 辞書設定 / Dictionary settings']!());
       assert.match(await uiText(), /SKK-JISYO.L を使用中/);
       await load('missing');
       await reset();
       await typeKeys('Nihon ');
       assert.match(await uiText(), /▼日本/);
       await page.keyboard.press('Enter');
-      await page.evaluate(() => window.__menus['SKK: 辞書設定 / Dictionary settings']());
+      await page.evaluate(() => window.__menus['SKK: 辞書設定 / Dictionary settings']!());
       assert.match(await uiText(), /内蔵小辞書を使用中/);
       if (upstreamResource) {
         await load('full');
@@ -539,14 +570,14 @@ try {
         assert.match(await uiText(), /▼日本/);
         await page.keyboard.press('Enter');
         assert.equal(await page.locator('#text').inputValue(), '日本');
-        await page.evaluate(() => window.__menus['SKK: 辞書設定 / Dictionary settings']());
+        await page.evaluate(() => window.__menus['SKK: 辞書設定 / Dictionary settings']!());
         assert.match(await uiText(), /SKK-JISYO.L を使用中/);
         const count = Number(
-          (await page.locator('.dialog p').first().textContent())
-            .match(/現在 ([\d,]+) 見出し/)[1]
+          (await page.locator('.dialog p').first().textContent())!
+            .match(/現在 ([\d,]+) 見出し/)![1]!
             .replaceAll(',', ''),
         );
-        assert.ok(count > 100000, count);
+        assert.ok(count > 100000, String(count));
         console.log(`${name}: real SKK-JISYO.L EUC-JP resource (${count} entries) passed`);
       }
       assert.deepEqual(errors, []);

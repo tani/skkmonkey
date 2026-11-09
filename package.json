@@ -9,22 +9,22 @@
     "build": "vp build",
     "typecheck": "vp check --no-fmt --no-lint",
     "test": "vp test run",
-    "test:browser": "node scripts/browser-test.mjs",
-    "test:editors": "vp run typecheck:editors && node scripts/editor-test.mjs",
+    "test:browser": "vpx scripts/browser-test.ts",
+    "test:editors": "vp run typecheck:editors && vpx scripts/editor-test.ts",
     "check": "vp check && vp test run && vp build && vp run test:browser && vp run test:editors",
-    "test:editors:matrix": "node scripts/editor-matrix.mjs",
+    "test:editors:matrix": "vpx scripts/editor-matrix.ts",
     "lint": "vp check --no-fmt",
     "fmt": "vp fmt",
-    "typecheck:editors": "node scripts/editor-install.mjs && vp lint --config test/editors/oxlint.json --tsconfig test/editors/tsconfig.json test/editors/*/fixture.ts test/editors/codemirror5.d.ts"
+    "typecheck:editors": "vpx scripts/editor-install.ts && vp lint --config test/editors/oxlint.json --tsconfig test/editors/tsconfig.json test/editors/*/fixture.ts test/editors/codemirror5.d.ts"
   },
   "devDependencies": {
     "@types/node": "24.19.0",
     "playwright": "1.62.1",
-    "vite-plus": "1.0.0"
+    "vite-plus": "1.5.0"
   },
   "overrides": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@1.0.0",
-    "vitest": "5.0.1"
+    "vite": "npm:@voidzero-dev/vite-plus-core@1.5.0",
+    "vitest": "5.1.0"
   },
   "engines": {
     "node": "^22.18.0 || ^24.11.0 || >=26.0.0"

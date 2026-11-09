@@ -139,7 +139,7 @@ for the test matrix.
 
 ## Development
 
-Uses **Vite+ 1.0.0** for development, builds, tests, linting, formatting, and type checks.
+Uses **Vite+ 1.5.0** for development, builds, tests, linting, formatting, and type checks.
 Requires Node.js **22.18+ (22.x), 24.11+ (24.x), or 26+**, and npm.
 
 ```sh
@@ -157,7 +157,8 @@ npm run fmt      # Format maintained source and configuration
 
 Configuration is centralized in `vite.config.ts`. Both the userscript and
 editor fixtures use Vite+ / Rolldown; Playwright drives Chromium and Firefox.
-The npm lockfile pins Vite+ and its bundled tools; no global Vite+ install is needed.
+The npm lockfile pins Vite+ and its bundled tools. The npm scripts use the
+project-local `vpx` to run TypeScript, so no global Vite+ install is needed.
 `npm run check` runs formatting, linting, type checking, engine tests, the userscript build, and
 browser/editor integration tests. Use `npm run build` to regenerate
 `dist/skk-ime.user.js`. Root dev dependencies are only `vite-plus`, `playwright`,
@@ -180,7 +181,7 @@ when tested behavior requires them; adapter selection uses DOM/capabilities.
 
 Each `test/editors/<editor>/` contains its fixture, `profiles.json`, and independent
 `profiles/<name>/package.json`, `package-lock.json`, and `profile.json` files.
-`test/editors/shared/scenarios.mjs` runs identical model/history/input assertions
+`test/editors/shared/scenarios.ts` runs identical model/history/input assertions
 on every profile. Profile builds resolve fixture dependencies only inside that
 profile's node_modules, failing if a dependency would fall back to the root tree.
 

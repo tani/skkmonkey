@@ -1,19 +1,47 @@
 import assert from 'node:assert/strict';
+import type { Page } from 'playwright';
+import type { NativeEditContext } from '../../../src/editors/shared/edit-context.ts';
 
-export async function runScenarios(page, name, errors) {
-  const names = await page.evaluate(() => Object.keys(window.fixture));
-  async function model(id) {
-    return page.evaluate((id) => window.fixture[id].get(), id);
+export type EditContextHost = HTMLElement & { editContext?: NativeEditContext };
+
+interface Fixture {
+  get(): string;
+  set(text: string): void;
+  focus(): void;
+  select(start: number, end: number): void;
+  cursor(): number;
+  readonly(value: boolean): void;
+  marked?: () => void;
+  html?: () => string;
+  multi?: () => void;
+}
+
+declare global {
+  interface Window {
+    fixtureReady: boolean;
+    fixture: Record<string, Fixture>;
+    skkUI: ShadowRoot;
+    debugEvents: Record<string, unknown>[];
   }
-  async function expectModel(id, text) {
+}
+
+export async function runScenarios(page: Page, name: string, errors: string[]) {
+  const names = await page.evaluate(() => Object.keys(window.fixture));
+  async function model(id: string) {
+    return page.evaluate((id) => window.fixture[id]!.get(), id);
+  }
+  async function expectModel(id: string, text: string) {
     try {
-      await page.waitForFunction(([id, text]) => window.fixture[id].get() === text, [id, text]);
+      await page.waitForFunction(({ id, text }) => window.fixture[id]!.get() === text, {
+        id,
+        text,
+      });
     } catch (error) {
       console.log(
         'DEBUG',
         await page.evaluate(
           (id) => ({
-            model: window.fixture[id].get(),
+            model: window.fixture[id]!.get(),
             active: document.activeElement?.outerHTML,
             preedit: window.skkUI?.querySelector('.preedit')?.textContent,
             note: window.skkUI?.querySelector('.note')?.textContent,
@@ -25,15 +53,15 @@ export async function runScenarios(page, name, errors) {
       throw error;
     }
   }
-  async function reset(id, text = '') {
+  async function reset(id: string, text = '') {
     await page.keyboard.press('Escape');
     await page.keyboard.press('Escape');
     await page.evaluate(
-      ([id, text]) => {
-        window.fixture[id].set(text);
-        window.fixture[id].focus();
+      ({ id, text }) => {
+        window.fixture[id]!.set(text);
+        window.fixture[id]!.focus();
       },
-      [id, text],
+      { id, text },
     );
     await page.keyboard.press('Control+j');
     // Allow the editor to update its hidden input / native EditContext.
@@ -51,7 +79,9 @@ export async function runScenarios(page, name, errors) {
         () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
       );
       assert.equal(
-        await page.evaluate(() => document.activeElement.editContext.text),
+        await page.evaluate(
+          () => (document.activeElement as EditContextHost | null)?.editContext?.text,
+        ),
         'こんにちは',
       );
     }
@@ -65,8 +95,8 @@ export async function runScenarios(page, name, errors) {
     await page.keyboard.type('Kanji');
     assert.equal(await model(id), '');
     await page.keyboard.press('Space');
-    const first = await page.evaluate(() =>
-      window.skkUI.querySelector('.preedit').textContent.slice(1),
+    const first = await page.evaluate(
+      () => window.skkUI.querySelector('.preedit')?.textContent?.slice(1) ?? '',
     );
     await page.keyboard.press('Space');
     await page.keyboard.press('x');
@@ -77,7 +107,7 @@ export async function runScenarios(page, name, errors) {
     await page.keyboard.press('Enter');
     await expectModel(id, '書く');
     await reset(id, 'alpha OLD omega');
-    await page.evaluate((id) => window.fixture[id].select(6, 9), id);
+    await page.evaluate((id) => window.fixture[id]!.select(6, 9), id);
     await page.evaluate(
       () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
     );
@@ -93,22 +123,22 @@ export async function runScenarios(page, name, errors) {
     // the editor model selection at the insertion point instead of falling
     // back to the end of the document after a component rerender.
     await reset(id, 'alpha OLD omega');
-    await page.evaluate((id) => window.fixture[id].select(6, 9), id);
+    await page.evaluate((id) => window.fixture[id]!.select(6, 9), id);
     await page.evaluate(
       () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
     );
     await page.keyboard.type('kana');
     await expectModel(id, 'alpha かな omega');
-    assert.equal(await page.evaluate((id) => window.fixture[id].cursor(), id), 8);
+    assert.equal(await page.evaluate((id) => window.fixture[id]!.cursor(), id), 8);
 
     await reset(id, 'alpha omega');
-    await page.evaluate((id) => window.fixture[id].select(6, 6), id);
+    await page.evaluate((id) => window.fixture[id]!.select(6, 6), id);
     await page.evaluate(
       () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
     );
     await page.keyboard.type('kana');
     await expectModel(id, 'alpha かなomega');
-    assert.equal(await page.evaluate((id) => window.fixture[id].cursor(), id), 8);
+    assert.equal(await page.evaluate((id) => window.fixture[id]!.cursor(), id), 8);
     await reset(id);
     await page.keyboard.type('Nihon ');
     await page.keyboard.press('Escape');
@@ -134,17 +164,17 @@ export async function runScenarios(page, name, errors) {
     await expectModel(id, '');
     await reset(id);
     await page.keyboard.type('Nihon');
-    await page.evaluate((id) => window.fixture[id].set('external'), id);
+    await page.evaluate((id) => window.fixture[id]!.set('external'), id);
     await page.evaluate(
       () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
     );
     await page.keyboard.type('a');
     await expectModel(id, 'externalあ');
     await reset(id, 'locked');
-    await page.evaluate((id) => window.fixture[id].readonly(true), id);
+    await page.evaluate((id) => window.fixture[id]!.readonly(true), id);
     await page.keyboard.type('kana');
     assert.equal(await model(id), 'locked');
-    await page.evaluate((id) => window.fixture[id].readonly(false), id);
+    await page.evaluate((id) => window.fixture[id]!.readonly(false), id);
     console.log(
       `${name}/${id}: kana, candidates, okuri, selected replacement, undo/redo, cancel, candidate click, cursor, delete, stale edit, read-only passed`,
     );
@@ -153,13 +183,16 @@ export async function runScenarios(page, name, errors) {
   if (names.includes('pm')) {
     await reset('pm');
     await page.evaluate(() => {
-      window.fixture.pm.marked();
-      window.fixture.pm.focus();
+      window.fixture.pm!.marked!();
+      window.fixture.pm!.focus();
     });
     await page.keyboard.type('Nihon ');
     await page.keyboard.press('Enter');
     await expectModel('pm', 'bold日本');
-    assert.match(await page.evaluate(() => window.fixture.pm.html()), /<strong>bold日本<\/strong>/);
+    assert.match(
+      await page.evaluate(() => window.fixture.pm!.html!()),
+      /<strong>bold日本<\/strong>/,
+    );
   }
   for (const id of [
     'monaco',
@@ -168,7 +201,7 @@ export async function runScenarios(page, name, errors) {
     'cm6',
   ].filter((id) => names.includes(id))) {
     await reset(id, 'x\ny');
-    await page.evaluate((id) => window.fixture[id].multi(), id);
+    await page.evaluate((id) => window.fixture[id]!.multi!(), id);
     await page.evaluate(
       () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
     );

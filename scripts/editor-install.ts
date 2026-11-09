@@ -9,7 +9,7 @@ for (const entry of await readdir(base, { withFileTypes: true })) {
   if (!entry.isDirectory() || entry.name === 'shared') continue;
   const dir = new URL(`${entry.name}/profiles/current/`, base);
   await readFile(new URL('package-lock.json', dir));
-  const code = await new Promise((resolve, reject) => {
+  const code = await new Promise<number>((resolve, reject) => {
     const child = spawn('npm', ['ci', '--ignore-scripts', '--no-audit', '--no-fund'], {
       cwd: fileURLToPath(dir),
       stdio: 'inherit',
