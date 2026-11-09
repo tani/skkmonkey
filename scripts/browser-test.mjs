@@ -198,6 +198,40 @@ try {
       assert.equal(await page.locator('#rich b').textContent(), 'prefix:');
       await page.keyboard.press('Control+z');
       assert.doesNotMatch(await page.locator('#rich').textContent(), /日本/);
+      // A host editor can acknowledge a commit after the next consonant arrives.
+      // A redraw can also replace the text node while preserving the caret.
+      await page.evaluate(() =>
+        localStorage.setItem('skk.dictionary.v1', JSON.stringify('はんえい /反映/')),
+      );
+      await load();
+      for (const change of ['notify', 'redraw', 'both', 'external', 'move']) {
+        await reset('#rich');
+        await typeKeys('Hannei ');
+        if (change === 'both') await page.keyboard.press('Enter');
+        await typeKeys('s'); // Also implicitly confirms the candidate when Enter was omitted.
+        assert.equal(await page.locator('#rich').textContent(), '反映');
+        await page.evaluate((change) => {
+          const rich = document.querySelector('#rich');
+          const selection = document.getSelection();
+          if (change === 'redraw' || change === 'both') {
+            rich.replaceChildren(document.createTextNode(rich.textContent));
+            selection.collapse(rich.firstChild, rich.textContent.length);
+          } else if (change === 'external') {
+            rich.textContent = '外部';
+            selection.collapse(rich.firstChild, rich.textContent.length);
+          } else if (change === 'move') {
+            selection.collapse(rich.firstChild, 0);
+          }
+          if (change === 'notify' || change === 'both' || change === 'external')
+            rich.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText' }));
+        }, change);
+        await typeKeys('arezu');
+        const expected =
+          change === 'external' ? '外部あれず' : change === 'move' ? 'あれず反映' : '反映されず';
+        assert.equal(await page.locator('#rich').textContent(), expected, change);
+      }
+      await page.evaluate(() => localStorage.removeItem('skk.dictionary.v1'));
+      await load();
       console.log(`${name}: contenteditable passed`);
 
       await reset();

@@ -68,17 +68,21 @@ async function main(): Promise<void> {
     };
     requestAnimationFrame(normalized);
   }
+  function reconcileInput(target: Editor): void {
+    if (writing || editor !== target) return;
+    // A delayed notification can describe an edit already included in the
+    // post-commit bookmark. Cancel only when the document or caret changed.
+    if (bookmark?.valid()) return;
+    engine.reset();
+    bookmark = null;
+    normalize(target);
+    render();
+  }
   function watchNative(target: Editor): void {
     const context = nativeContext(target);
     if (!context || watchedContexts.has(context)) return;
     watchedContexts.add(context);
-    context.addEventListener('textupdate', () => {
-      if (writing || editor !== target) return;
-      engine.reset();
-      bookmark = null;
-      normalize(target);
-      render();
-    });
+    context.addEventListener('textupdate', () => reconcileInput(target));
     context.addEventListener('compositionstart', () => {
       if (writing || editor !== target) return;
       settle();
@@ -325,12 +329,8 @@ async function main(): Promise<void> {
   document.addEventListener(
     'input',
     (e) => {
-      if (!writing && findEditor(e.composedPath()) === editor) {
-        engine.reset();
-        bookmark = null;
-        if (editor) normalize(editor);
-        render();
-      }
+      const target = findEditor(e.composedPath());
+      if (target) reconcileInput(target);
     },
     true,
   );

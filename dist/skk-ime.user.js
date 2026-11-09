@@ -607,8 +607,7 @@ misrepresented as being the original software.
 			}
 			if (this.phase === "candidate") {
 				if (/^[1-5]$/.test(key)) {
-					const pageStart = Math.floor(this.index / 5) * 5;
-					const selected = pageStart + Number(key) - 1;
+					const selected = Math.floor(this.index / 5) * 5 + Number(key) - 1;
 					if (selected >= this.candidates.length) return true;
 					this.index = selected;
 					this.output += this.finish();
@@ -700,59 +699,6 @@ misrepresented as being the original software.
 		return context && typeof context.text === "string" ? context : null;
 	}
 	//#endregion
-	//#region src/editors/slack/index.ts
-	function isSlackComposer(element) {
-		if (!element.isContentEditable) return false;
-		const role = element.getAttribute("role");
-		const cls = element.className;
-		return role === "textbox" && typeof cls === "string" && /(?:ql-editor|c-texty_input|slack|message)/i.test(cls + " " + element.outerHTML.slice(0, 300));
-	}
-	function textOf(root) {
-		return root.innerText ?? root.textContent ?? "";
-	}
-	function insertSlack(root, text) {
-		root.focus();
-		const bookmark = captureTextSelection(root);
-		const before = new InputEvent("beforeinput", {
-			bubbles: true,
-			composed: true,
-			cancelable: true,
-			inputType: "insertText",
-			data: text
-		});
-		if (!root.dispatchEvent(before)) return false;
-		const selection = root.ownerDocument.getSelection();
-		if (!selection || selection.rangeCount === 0) return false;
-		const range = selection.getRangeAt(0);
-		range.deleteContents();
-		range.insertNode(root.ownerDocument.createTextNode(text));
-		range.collapse(false);
-		selection.removeAllRanges();
-		selection.addRange(range);
-		root.dispatchEvent(new InputEvent("input", {
-			bubbles: true,
-			composed: true,
-			inputType: "insertText",
-			data: text
-		}));
-		stabilizeInsertedCaret(bookmark, text.length);
-		return true;
-	}
-	var adapter$6 = {
-		kind: "slack",
-		detect(element) {
-			if (isSlackComposer(element)) return element;
-			const candidate = element.closest('[contenteditable="true"][role="textbox"]');
-			return candidate && isSlackComposer(candidate) ? candidate : null;
-		},
-		snapshot(root) {
-			return textOf(root);
-		},
-		insert(element, text) {
-			return insertSlack(element, text);
-		}
-	};
-	//#endregion
 	//#region src/editors/monaco/edit-context.ts
 	function typeIntoEditContext(element, text) {
 		const context = nativeContext(element);
@@ -809,7 +755,7 @@ misrepresented as being the original software.
 	}
 	//#endregion
 	//#region src/editors/monaco/index.ts
-	var adapter$5 = {
+	var adapter$6 = {
 		kind: "monaco",
 		detect(element) {
 			return element.matches("textarea.inputarea, .native-edit-context") ? element.closest(".monaco-editor") : null;
@@ -829,17 +775,23 @@ misrepresented as being the original software.
 		return range.toString().length;
 	}
 	function captureTextSelection(element) {
-		const root = element.isContentEditable ? element : element.closest('[contenteditable]:not([contenteditable="false"])');
+		const root = element.isContentEditable ? element : element.closest("[contenteditable]:not([contenteditable=\"false\"])");
 		if (!root) return null;
 		const selection = root.ownerDocument.getSelection();
 		if (!selection?.rangeCount) return null;
 		const range = selection.getRangeAt(0);
 		if (!root.contains(range.startContainer) || !root.contains(range.endContainer)) return null;
-		return { root, start: offsetAt(root, range.startContainer, range.startOffset), end: offsetAt(root, range.endContainer, range.endOffset), length: root.textContent?.length ?? 0 };
+		return {
+			root,
+			start: offsetAt(root, range.startContainer, range.startOffset),
+			end: offsetAt(root, range.endContainer, range.endOffset),
+			length: root.textContent?.length ?? 0
+		};
 	}
 	function pointAt(root, offset) {
 		const walker = root.ownerDocument.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-		let remaining = offset, node;
+		let remaining = offset;
+		let node;
 		while (node = walker.nextNode()) {
 			const length = node.textContent?.length ?? 0;
 			if (remaining <= length) return [node, remaining];
@@ -897,7 +849,7 @@ misrepresented as being the original software.
 	}
 	//#endregion
 	//#region src/editors/codemirror5/index.ts
-	var adapter$4 = {
+	var adapter$5 = {
 		kind: "codemirror5",
 		detect(element) {
 			if (!(element.matches("textarea") && !element.closest(".CodeMirror-dialog")) && !element.closest(".CodeMirror-code")) return null;
@@ -934,7 +886,7 @@ misrepresented as being the original software.
 	}
 	//#endregion
 	//#region src/editors/codemirror6/index.ts
-	var adapter$3 = {
+	var adapter$4 = {
 		kind: "codemirror6",
 		detect(element) {
 			if (!element.closest(".cm-content")) return null;
@@ -947,7 +899,7 @@ misrepresented as being the original software.
 	};
 	//#endregion
 	//#region src/editors/prosemirror/index.ts
-	var adapter$2 = {
+	var adapter$3 = {
 		kind: "prosemirror",
 		detect(element) {
 			return element.closest(".ProseMirror");
@@ -959,8 +911,8 @@ misrepresented as being the original software.
 	};
 	//#endregion
 	//#region src/editors/tiptap/index.ts
-	var adapter$1 = {
-		...adapter$2,
+	var adapter$2 = {
+		...adapter$3,
 		kind: "tiptap",
 		detect: (element) => element.closest(".tiptap.ProseMirror")
 	};
@@ -983,25 +935,80 @@ misrepresented as being the original software.
 		return true;
 	}
 	//#endregion
+	//#region src/editors/quill/index.ts
+	var adapter$1 = {
+		kind: "quill",
+		detect(element) {
+			if (!element.closest(".ql-editor")) return null;
+			return element.closest(".ql-container");
+		},
+		snapshot(root) {
+			return ((root.matches(".ql-editor") ? root : root.querySelector(".ql-editor"))?.textContent ?? "") + "\0";
+		},
+		insert: (element, text) => legacyInstance(element) ? insertLegacy(element, text) : pasteIntoComponent(element, text)
+	};
+	//#endregion
+	//#region src/editors/slack/index.ts
+	function isSlackComposer(element) {
+		if (!element.isContentEditable) return false;
+		const role = element.getAttribute("role");
+		const cls = element.className;
+		return role === "textbox" && typeof cls === "string" && /(?:ql-editor|c-texty_input|slack|message)/i.test(cls + " " + element.outerHTML.slice(0, 300));
+	}
+	function textOf(root) {
+		return root.innerText ?? root.textContent ?? "";
+	}
+	function insertSlack(root, text) {
+		root.focus();
+		const bookmark = captureTextSelection(root);
+		const before = new InputEvent("beforeinput", {
+			bubbles: true,
+			composed: true,
+			cancelable: true,
+			inputType: "insertText",
+			data: text
+		});
+		if (!root.dispatchEvent(before)) return false;
+		const selection = root.ownerDocument.getSelection();
+		if (!selection || selection.rangeCount === 0) return false;
+		const range = selection.getRangeAt(0);
+		range.deleteContents();
+		range.insertNode(root.ownerDocument.createTextNode(text));
+		range.collapse(false);
+		selection.removeAllRanges();
+		selection.addRange(range);
+		root.dispatchEvent(new InputEvent("input", {
+			bubbles: true,
+			composed: true,
+			inputType: "insertText",
+			data: text
+		}));
+		stabilizeInsertedCaret(bookmark, text.length);
+		return true;
+	}
+	//#endregion
 	//#region src/editors/registry.ts
 	var adapters = [
+		{
+			kind: "slack",
+			detect(element) {
+				if (isSlackComposer(element)) return element;
+				const candidate = element.closest("[contenteditable=\"true\"][role=\"textbox\"]");
+				return candidate && isSlackComposer(candidate) ? candidate : null;
+			},
+			snapshot(root) {
+				return textOf(root);
+			},
+			insert(element, text) {
+				return insertSlack(element, text);
+			}
+		},
 		adapter$6,
 		adapter$5,
 		adapter$4,
-		adapter$3,
-		adapter$1,
 		adapter$2,
-		{
-			kind: "quill",
-			detect(element) {
-				if (!element.closest(".ql-editor")) return null;
-				return element.closest(".ql-container");
-			},
-			snapshot(root) {
-				return ((root.matches(".ql-editor") ? root : root.querySelector(".ql-editor"))?.textContent ?? "") + "\0";
-			},
-			insert: (element, text) => legacyInstance(element) ? insertLegacy(element, text) : pasteIntoComponent(element, text)
-		}
+		adapter$3,
+		adapter$1
 	];
 	function componentFor(element) {
 		for (const adapter of adapters) {
@@ -1065,11 +1072,50 @@ misrepresented as being the original software.
 		const root = editor.getRootNode();
 		return "getSelection" in root && root.getSelection ? root.getSelection() : document.getSelection();
 	}
+	function textOffsetAt(root, node, offset) {
+		const prefix = root.ownerDocument.createRange();
+		prefix.selectNodeContents(root);
+		prefix.setEnd(node, offset);
+		return prefix.toString().length;
+	}
+	function captureBoundary(root, node, offset) {
+		const path = [];
+		const { nodeType } = node;
+		const textOffset = textOffsetAt(root, node, offset);
+		while (node !== root) {
+			const parent = node.parentNode;
+			path.push(Array.from(parent.childNodes).indexOf(node));
+			node = parent;
+		}
+		return {
+			path: path.reverse(),
+			offset,
+			nodeType,
+			textOffset
+		};
+	}
+	function resolveBoundary(root, boundary) {
+		let node = root;
+		for (const index of boundary.path) {
+			const child = node.childNodes[index];
+			if (!child) return null;
+			node = child;
+		}
+		const length = node instanceof CharacterData ? node.length : node.childNodes.length;
+		if (node.nodeType !== boundary.nodeType || boundary.offset > length) return null;
+		return textOffsetAt(root, node, boundary.offset) === boundary.textOffset ? node : null;
+	}
+	function currentRange(editor) {
+		const selection = selectionFor(editor);
+		if (!selection?.rangeCount) return null;
+		const range = selection.getRangeAt(0);
+		return editor.contains(range.commonAncestorContainer) ? range : null;
+	}
 	var Bookmark = class {
 		value;
 		start = 0;
 		end = 0;
-		range = null;
+		contentSelection = null;
 		componentState;
 		editor;
 		constructor(editor) {
@@ -1085,12 +1131,12 @@ misrepresented as being the original software.
 				this.start = editor.selectionStart ?? 0;
 				this.end = editor.selectionEnd ?? this.start;
 			} else {
-				this.value = editor.textContent ?? "";
-				const selection = selectionFor(editor);
-				if (selection?.rangeCount) {
-					const range = selection.getRangeAt(0);
-					if (editor.contains(range.commonAncestorContainer)) this.range = range.cloneRange();
-				}
+				this.value = editor.innerHTML;
+				const range = currentRange(editor);
+				if (range) this.contentSelection = {
+					start: captureBoundary(editor, range.startContainer, range.startOffset),
+					end: captureBoundary(editor, range.endContainer, range.endOffset)
+				};
 			}
 		}
 		valid() {
@@ -1100,11 +1146,10 @@ misrepresented as being the original software.
 			const context = nativeContext(editor);
 			if (context) return context.text === this.value && context.selectionStart === this.start && context.selectionEnd === this.end;
 			if (editor instanceof HTMLInputElement || editor instanceof HTMLTextAreaElement) return !editor.disabled && !editor.readOnly && editor.value === this.value && editor.selectionStart === this.start && editor.selectionEnd === this.end;
-			if (!editor.isContentEditable || (editor.textContent ?? "") !== this.value || !this.range) return false;
-			const selection = selectionFor(editor);
-			if (!selection?.rangeCount) return false;
-			const current = selection.getRangeAt(0);
-			return current.startContainer === this.range.startContainer && current.startOffset === this.range.startOffset && current.endContainer === this.range.endContainer && current.endOffset === this.range.endOffset;
+			const saved = this.contentSelection;
+			if (!editor.isContentEditable || !saved || editor.innerHTML !== this.value) return false;
+			const current = currentRange(editor);
+			return current !== null && current.startContainer === resolveBoundary(editor, saved.start) && current.startOffset === saved.start.offset && current.endContainer === resolveBoundary(editor, saved.end) && current.endOffset === saved.end.offset;
 		}
 		restoreFocus() {
 			const editor = this.editor;
@@ -1124,11 +1169,19 @@ misrepresented as being the original software.
 				editor.setSelectionRange(this.start, this.end);
 				return true;
 			}
-			if (!editor.isContentEditable || editor.textContent !== this.value || !this.range?.startContainer.isConnected || !this.range.endContainer.isConnected) return false;
+			const saved = this.contentSelection;
+			if (!editor.isContentEditable || !saved || editor.innerHTML !== this.value) return false;
 			editor.focus();
+			if (editor.innerHTML !== this.value) return false;
+			const start = resolveBoundary(editor, saved.start);
+			const end = resolveBoundary(editor, saved.end);
+			if (!start || !end) return false;
+			const range = editor.ownerDocument.createRange();
+			range.setStart(start, saved.start.offset);
+			range.setEnd(end, saved.end.offset);
 			const selection = selectionFor(editor);
 			selection?.removeAllRanges();
-			selection?.addRange(this.range.cloneRange());
+			selection?.addRange(range);
 			editor.ownerDocument.dispatchEvent(new Event("selectionchange"));
 			return true;
 		}
@@ -1147,7 +1200,8 @@ misrepresented as being the original software.
 			});
 			if (!editor.dispatchEvent(before) || !this.valid()) return false;
 			if (editor instanceof HTMLInputElement || editor instanceof HTMLTextAreaElement) return insertInput(editor, text);
-			return insertContenteditable(editor, text, this.range, selectionFor(editor));
+			const range = currentRange(editor);
+			return range ? insertContenteditable(editor, text, range, selectionFor(editor)) : false;
 		}
 	};
 	//#endregion
@@ -1454,17 +1508,19 @@ ime /IME;Input Method Editor/
 			};
 			requestAnimationFrame(normalized);
 		}
+		function reconcileInput(target) {
+			if (writing || editor !== target) return;
+			if (bookmark?.valid()) return;
+			engine.reset();
+			bookmark = null;
+			normalize(target);
+			render();
+		}
 		function watchNative(target) {
 			const context = nativeContext(target);
 			if (!context || watchedContexts.has(context)) return;
 			watchedContexts.add(context);
-			context.addEventListener("textupdate", () => {
-				if (writing || editor !== target) return;
-				engine.reset();
-				bookmark = null;
-				normalize(target);
-				render();
-			});
+			context.addEventListener("textupdate", () => reconcileInput(target));
 			context.addEventListener("compositionstart", () => {
 				if (writing || editor !== target) return;
 				settle();
@@ -1676,12 +1732,8 @@ ime /IME;Input Method Editor/
 			nativeComposition = false;
 		}, true);
 		document.addEventListener("input", (e) => {
-			if (!writing && findEditor(e.composedPath()) === editor) {
-				engine.reset();
-				bookmark = null;
-				if (editor) normalize(editor);
-				render();
-			}
+			const target = findEditor(e.composedPath());
+			if (target) reconcileInput(target);
 		}, true);
 		document.addEventListener("pointerdown", (e) => {
 			if (ui.settings.hidden && findEditor(e.composedPath()) === editor) {
