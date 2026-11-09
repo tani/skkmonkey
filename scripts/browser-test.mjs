@@ -230,6 +230,34 @@ try {
           change === 'external' ? '外部あれず' : change === 'move' ? 'あれず反映' : '反映されず';
         assert.equal(await page.locator('#rich').textContent(), expected, change);
       }
+      // A controlled editor can apply the candidate itself and cancel native
+      // insertion. Its synthetic composition events must not disable SKK.
+      await reset('#rich');
+      await page.evaluate(() => {
+        const rich = document.querySelector('#rich');
+        rich.addEventListener(
+          'beforeinput',
+          (event) => {
+            event.preventDefault();
+            rich.textContent = event.data;
+            document.getSelection().collapse(rich.firstChild, rich.textContent.length);
+            setTimeout(() => {
+              rich.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+              rich.dataset.compositionDispatched = 'true';
+            }, 0);
+          },
+          { once: true },
+        );
+      });
+      await typeKeys('Hannei ');
+      assert.match(await uiText(), /▼反映/);
+      await typeKeys('s');
+      await page.waitForFunction(
+        () => document.querySelector('#rich').dataset.compositionDispatched,
+      );
+      await typeKeys('arezu');
+      assert.equal(await page.locator('#rich').textContent(), '反映されず');
+
       await page.evaluate(() => localStorage.removeItem('skk.dictionary.v1'));
       await load();
       console.log(`${name}: contenteditable passed`);
@@ -269,19 +297,21 @@ try {
       await typeKeys('a');
       assert.equal(await page.locator('#text').inputValue(), 'externalあ');
 
-      await reset();
-      await page.evaluate(() =>
-        document
-          .querySelector('#text')
-          .dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true })),
-      );
-      await typeKeys('kana');
-      await page.evaluate(() =>
-        document
-          .querySelector('#text')
-          .dispatchEvent(new CompositionEvent('compositionend', { bubbles: true })),
-      );
-      assert.equal(await page.locator('#text').inputValue(), 'kana');
+      if (name === 'chromium') {
+        // Drive Chromium's native IME path, which emits trusted composition events.
+        await reset();
+        const session = await page.context().newCDPSession(page);
+        await session.send('Input.imeSetComposition', {
+          text: 'に',
+          selectionStart: 1,
+          selectionEnd: 1,
+        });
+        assert.equal(await page.locator('#text').inputValue(), 'に');
+        await session.send('Input.insertText', { text: '日本' });
+        await session.detach();
+        await typeKeys('kana');
+        assert.equal(await page.locator('#text').inputValue(), '日本かな');
+      }
 
       await reset();
       await page.evaluate(() =>

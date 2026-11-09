@@ -27,7 +27,6 @@ async function main(): Promise<void> {
   const engine = new Engine(dictionary);
   let editor: Editor | null = null;
   let bookmark: Bookmark | null = null;
-  let nativeComposition = false;
   let registering = false;
   let writing = false;
   let normalizing = false;
@@ -78,21 +77,17 @@ async function main(): Promise<void> {
     normalize(target);
     render();
   }
+  function startComposition(event: Event, target: Editor): void {
+    // Let the OS IME take over this field without treating an editor's
+    // synthetic composition events as a native input session.
+    if (event.isTrusted && !writing && ui.settings.hidden && editor === target) settle();
+  }
   function watchNative(target: Editor): void {
     const context = nativeContext(target);
     if (!context || watchedContexts.has(context)) return;
     watchedContexts.add(context);
     context.addEventListener('textupdate', () => reconcileInput(target));
-    context.addEventListener('compositionstart', () => {
-      if (writing || editor !== target) return;
-      settle();
-      nativeComposition = true;
-    });
-    context.addEventListener('compositionend', () => {
-      if (writing || editor !== target) return;
-      nativeComposition = false;
-      normalize(target);
-    });
+    context.addEventListener('compositionstart', (event) => startComposition(event, target));
   }
   function commit(text: string): boolean {
     if (!text) return true;
@@ -107,10 +102,9 @@ async function main(): Promise<void> {
     } finally {
       writing = false;
     }
-    if (!inserted) {
-      engine.reset();
-      ui.message('入力位置が変わったため変換を取り消しました。');
-    }
+    // A single key can finish a candidate and start the next syllable.
+    // The editor may consume or reject the candidate; keep that next syllable.
+    if (!inserted) ui.message('変換結果の挿入を確認できませんでした。');
     bookmark = editor ? new Bookmark(editor) : null;
     if (inserted && editor) normalize(editor);
     return inserted;
@@ -312,17 +306,9 @@ async function main(): Promise<void> {
   );
   document.addEventListener(
     'compositionstart',
-    () => {
-      if (!ui.settings.hidden) return;
-      settle();
-      nativeComposition = true;
-    },
-    true,
-  );
-  document.addEventListener(
-    'compositionend',
-    () => {
-      nativeComposition = false;
+    (e) => {
+      const target = findEditor(e.composedPath());
+      if (target) startComposition(e, target);
     },
     true,
   );
@@ -369,7 +355,9 @@ async function main(): Promise<void> {
   document.addEventListener(
     'keydown',
     (e) => {
-      if (!ui.settings.hidden || nativeComposition || e.isComposing || e.keyCode === 229) return;
+      // Use this key's native IME flags. A composition end can be missing or
+      // retargeted, so a document-wide flag could leave ordinary keys bypassed.
+      if (!ui.settings.hidden || e.isComposing || e.keyCode === 229) return;
       const target = findEditor(e.composedPath());
       if (!target) return;
       if (target !== editor) {

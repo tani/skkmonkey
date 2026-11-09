@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SKK Browser IME
 // @namespace    cc.tani.skk-userscript
-// @version      0.3.5
+// @version      0.3.8
 // @description  Local SKK Japanese input; TypeScript, skkeleton kana rules, local dictionaries
 // @match        https://*/*
 // @match        http://*/*
@@ -1470,7 +1470,6 @@ ime /IME;Input Method Editor/
 		const engine = new Engine(dictionary);
 		let editor = null;
 		let bookmark = null;
-		let nativeComposition = false;
 		let registering = false;
 		let writing = false;
 		let normalizing = false;
@@ -1516,21 +1515,15 @@ ime /IME;Input Method Editor/
 			normalize(target);
 			render();
 		}
+		function startComposition(event, target) {
+			if (event.isTrusted && !writing && ui.settings.hidden && editor === target) settle();
+		}
 		function watchNative(target) {
 			const context = nativeContext(target);
 			if (!context || watchedContexts.has(context)) return;
 			watchedContexts.add(context);
 			context.addEventListener("textupdate", () => reconcileInput(target));
-			context.addEventListener("compositionstart", () => {
-				if (writing || editor !== target) return;
-				settle();
-				nativeComposition = true;
-			});
-			context.addEventListener("compositionend", () => {
-				if (writing || editor !== target) return;
-				nativeComposition = false;
-				normalize(target);
-			});
+			context.addEventListener("compositionstart", (event) => startComposition(event, target));
 		}
 		function commit(text) {
 			if (!text) return true;
@@ -1542,10 +1535,7 @@ ime /IME;Input Method Editor/
 			} finally {
 				writing = false;
 			}
-			if (!inserted) {
-				engine.reset();
-				ui.message("入力位置が変わったため変換を取り消しました。");
-			}
+			if (!inserted) ui.message("変換結果の挿入を確認できませんでした。");
 			bookmark = editor ? new Bookmark(editor) : null;
 			if (inserted && editor) normalize(editor);
 			return inserted;
@@ -1723,13 +1713,9 @@ ime /IME;Input Method Editor/
 			editor = null;
 			render();
 		}, true);
-		document.addEventListener("compositionstart", () => {
-			if (!ui.settings.hidden) return;
-			settle();
-			nativeComposition = true;
-		}, true);
-		document.addEventListener("compositionend", () => {
-			nativeComposition = false;
+		document.addEventListener("compositionstart", (e) => {
+			const target = findEditor(e.composedPath());
+			if (target) startComposition(e, target);
 		}, true);
 		document.addEventListener("input", (e) => {
 			const target = findEditor(e.composedPath());
@@ -1755,7 +1741,7 @@ ime /IME;Input Method Editor/
 			}
 		}, true);
 		document.addEventListener("keydown", (e) => {
-			if (!ui.settings.hidden || nativeComposition || e.isComposing || e.keyCode === 229) return;
+			if (!ui.settings.hidden || e.isComposing || e.keyCode === 229) return;
 			const target = findEditor(e.composedPath());
 			if (!target) return;
 			if (target !== editor) {
