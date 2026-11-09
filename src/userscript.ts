@@ -129,7 +129,7 @@ async function main(): Promise<void> {
     }
     // A delayed notification can describe an edit already included in the
     // post-commit bookmark. Cancel only when the document or caret changed.
-    if (bookmark?.valid()) return;
+    if (bookmark?.valid() || (!trusted && bookmark?.awaitingSlackSelection())) return;
     engine.reset();
     bookmark = null;
     normalize(target);

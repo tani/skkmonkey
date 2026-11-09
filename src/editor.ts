@@ -1,6 +1,7 @@
 import { componentFor, componentSnapshot, nativeContext } from './component.ts';
 import { insertInput } from './editors/native/input.ts';
 import { insertContenteditable } from './editors/native/contenteditable.ts';
+import { slackSelectionKey } from './editors/slack/index.ts';
 import { currentRange, selectionFor } from './editors/shared/selection.ts';
 import type { Editor, PendingInsertion } from './editors/types.ts';
 export type { Editor } from './editors/types.ts';
@@ -53,10 +54,12 @@ export class Bookmark {
   private end = 0;
   private contentSelection: { start: Boundary; end: Boundary } | null = null;
   private componentState: string;
+  private slackPosition: string | null = null;
   readonly editor: Editor;
   constructor(editor: Editor) {
     this.editor = editor;
-    this.componentState = componentSnapshot(editor);
+    const component = componentFor(editor);
+    this.componentState = component?.adapter.snapshot(component.root) ?? '';
     const context = nativeContext(editor);
     if (context) {
       this.value = context.text;
@@ -72,6 +75,8 @@ export class Bookmark {
       this.value = editor.innerHTML;
       const range = currentRange(editor);
       if (range) {
+        if (component?.kind === 'slack' && editor.matches('.ql-editor'))
+          this.slackPosition = slackSelectionKey(editor, range);
         this.contentSelection = {
           start: captureBoundary(editor, range.startContainer, range.startOffset),
           end: captureBoundary(editor, range.endContainer, range.endOffset),
@@ -100,14 +105,25 @@ export class Bookmark {
       );
     }
     const saved = this.contentSelection;
-    if (!editor.isContentEditable || !saved || editor.innerHTML !== this.value) return false;
+    if (!editor.isContentEditable || !saved) return false;
     const current = currentRange(editor);
-    return (
-      current !== null &&
+    if (!current) return false;
+    if (
+      editor.innerHTML === this.value &&
       current.startContainer === resolveBoundary(editor, saved.start) &&
       current.startOffset === saved.start.offset &&
       current.endContainer === resolveBoundary(editor, saved.end) &&
       current.endOffset === saved.end.offset
+    )
+      return true;
+    return this.slackPosition !== null && slackSelectionKey(editor, current) === this.slackPosition;
+  }
+  awaitingSlackSelection(): boolean {
+    return (
+      this.slackPosition !== null &&
+      this.editor.isConnected &&
+      !currentRange(this.editor) &&
+      componentSnapshot(this.editor) === this.componentState
     );
   }
   restoreFocus(): boolean {

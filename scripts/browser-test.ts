@@ -26,9 +26,11 @@ const upstreamResource = process.env.SKK_TEST_DICTIONARY_PATH
   : null;
 const script = await readFile(new URL('../dist/skk-ime.user.js', import.meta.url), 'utf8');
 const html = `<!doctype html><html lang="ja"><meta charset="utf-8"><title>SKK test fixture</title>
-<style>body{font:18px system-ui;margin:35px}textarea,input,[contenteditable]{display:block;width:500px;margin:16px;padding:12px;border:1px solid #aaa}textarea{height:100px}[contenteditable]{white-space:pre-wrap}</style>
+<style>body{font:18px system-ui;margin:35px}textarea,input,[contenteditable]{display:block;width:500px;margin:16px;padding:12px;border:1px solid #aaa}textarea{height:100px}[contenteditable]{white-space:pre-wrap}
+#slack p{margin:0 0 12px}#slack.ql-blank::before{position:absolute;content:attr(data-placeholder);color:#888}</style>
 <h1>SKK Browser IME</h1><form><textarea id="text"></textarea><input id="input"><input id="password" type="password"><input id="readonly" readonly>
 <div id="rich" contenteditable="true"><b>prefix:</b> </div><div data-skk-disable><textarea id="optout"></textarea></div>
+<div class="c-texty_input"><div id="slack" class="ql-editor" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Message #test" data-placeholder="Message #test"></div></div>
 <div id="slate" data-slate-editor="true" contenteditable="true" role="textbox" aria-label="Message #test"></div>
 <input id="controlled"><div id="shadowhost"></div><button type="submit">Send</button></form>
 <script>
@@ -195,6 +197,78 @@ try {
         document.querySelector('#rich')!.innerHTML = '<b>prefix:</b> ';
       });
       await reset();
+      // Slack's Quill-shaped composer uses block boundaries and a blank placeholder.
+      const slack = page.locator('#slack');
+      await slack.focus();
+      await page.keyboard.press('Control+j');
+      await page.evaluate(() => {
+        const field = document.querySelector('#slack')!;
+        field.innerHTML = '<p>first</p><p><br></p>';
+        document.getSelection()!.collapse(field, 1);
+      });
+      await typeKeys('k');
+      await inline.waitFor({ state: 'visible' });
+      const slackPreview = await inline.boundingBox();
+      const slackLine = await slack.locator('p').nth(1).boundingBox();
+      assert.ok(slackPreview && slackLine);
+      assert.ok(slackPreview.y >= slackLine.y && slackPreview.y < slackLine.y + slackLine.height);
+      await page.keyboard.press('Escape');
+
+      await page.evaluate(() => {
+        const field = document.querySelector('#slack')!;
+        field.classList.add('ql-blank');
+        field.innerHTML = '<p><br></p>';
+        document.getSelection()!.collapse(field.firstChild!, 0);
+      });
+      await typeKeys('k');
+      await inline.waitFor({ state: 'visible' });
+      const slackPlaceholder = () =>
+        slack.evaluate((field) => getComputedStyle(field, '::before').visibility);
+      assert.equal(await slackPlaceholder(), 'hidden');
+      await page.keyboard.press('Backspace');
+      assert.equal(await slackPlaceholder(), 'visible');
+
+      await page.evaluate(() => {
+        const field = document.querySelector('#slack')!;
+        field.classList.remove('ql-blank');
+        field.innerHTML = '<p>first</p><p>last</p>';
+        document.getSelection()!.collapse(field.lastChild!.firstChild!, 4);
+      });
+      await typeKeys('k');
+      await inline.waitFor({ state: 'visible' });
+      await page.evaluate(() => {
+        document.getSelection()!.removeAllRanges();
+        document
+          .querySelector('#slack')!
+          .dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText' }));
+      });
+      await inline.waitFor({ state: 'hidden' });
+      await page.evaluate(() => {
+        const field = document.querySelector('#slack')!;
+        field.lastElementChild!.innerHTML = '<span>last</span>';
+        document.getSelection()!.collapse(field.lastElementChild!.firstChild!.firstChild!, 4);
+        field.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText' }));
+      });
+      await inline.waitFor({ state: 'visible' });
+      assert.equal(await inline.textContent(), 'k');
+      await typeKeys('a');
+      assert.equal(await slack.textContent(), 'firstlastか');
+      await inline.waitFor({ state: 'hidden' });
+      await page.evaluate(() => {
+        const field = document.querySelector('#slack')!;
+        field.innerHTML = '<p><br></p><p><br></p>';
+        document.getSelection()!.collapse(field.firstChild!, 0);
+      });
+      await typeKeys('k');
+      await inline.waitFor({ state: 'visible' });
+      await page.evaluate(() => {
+        document.getSelection()!.collapse(document.querySelector('#slack')!.lastChild!, 0);
+      });
+      await typeKeys('a');
+      assert.equal(await slack.locator('p').nth(0).textContent(), '');
+      assert.equal(await slack.locator('p').nth(1).textContent(), 'あ');
+      await reset();
+
       const burst = await page.evaluate(() => {
         const field = document.querySelector<HTMLTextAreaElement>('#text')!;
         field.value = '';

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SKK Browser IME
 // @namespace    cc.tani.skk-userscript
-// @version      0.3.10
+// @version      0.3.11
 // @description  Local SKK Japanese input; TypeScript, skkeleton kana rules, local dictionaries
 // @match        https://*/*
 // @match        http://*/*
@@ -998,6 +998,17 @@ misrepresented as being the original software.
 		const cls = element.className;
 		return role === "textbox" && typeof cls === "string" && /(?:ql-editor|c-texty_input|slack|message)/i.test(cls + " " + element.outerHTML.slice(0, 300));
 	}
+	function slackSelectionKey(root, range) {
+		const prefix = root.ownerDocument.createRange();
+		prefix.selectNodeContents(root);
+		const lines = Array.from(root.querySelectorAll("p, li, pre, blockquote, h1, h2, h3, h4, h5, h6"));
+		const atoms = Array.from(root.querySelectorAll("[contenteditable=\"false\"], img"));
+		const offset = (node, index) => {
+			prefix.setEnd(node, index);
+			return `${lines.filter((line) => prefix.comparePoint(line, 0) === 0).length}:${atoms.filter((atom) => prefix.comparePoint(atom, 0) === 0).length}:${prefix.toString().length}`;
+		};
+		return offset(range.startContainer, range.startOffset) + "/" + offset(range.endContainer, range.endOffset);
+	}
 	function textOf(root) {
 		return root.innerText ?? root.textContent ?? "";
 	}
@@ -1012,9 +1023,9 @@ misrepresented as being the original software.
 			data: text
 		});
 		if (!root.dispatchEvent(before)) return false;
-		const selection = root.ownerDocument.getSelection();
-		if (!selection || selection.rangeCount === 0) return false;
-		const range = selection.getRangeAt(0);
+		const selection = selectionFor(root);
+		const range = currentRange(root);
+		if (!selection || !range) return false;
 		range.deleteContents();
 		range.insertNode(root.ownerDocument.createTextNode(text));
 		range.collapse(false);
@@ -1147,10 +1158,12 @@ misrepresented as being the original software.
 		end = 0;
 		contentSelection = null;
 		componentState;
+		slackPosition = null;
 		editor;
 		constructor(editor) {
 			this.editor = editor;
-			this.componentState = componentSnapshot(editor);
+			const component = componentFor(editor);
+			this.componentState = component?.adapter.snapshot(component.root) ?? "";
 			const context = nativeContext(editor);
 			if (context) {
 				this.value = context.text;
@@ -1163,10 +1176,13 @@ misrepresented as being the original software.
 			} else {
 				this.value = editor.innerHTML;
 				const range = currentRange(editor);
-				if (range) this.contentSelection = {
-					start: captureBoundary(editor, range.startContainer, range.startOffset),
-					end: captureBoundary(editor, range.endContainer, range.endOffset)
-				};
+				if (range) {
+					if (component?.kind === "slack" && editor.matches(".ql-editor")) this.slackPosition = slackSelectionKey(editor, range);
+					this.contentSelection = {
+						start: captureBoundary(editor, range.startContainer, range.startOffset),
+						end: captureBoundary(editor, range.endContainer, range.endOffset)
+					};
+				}
 			}
 		}
 		valid() {
@@ -1177,9 +1193,14 @@ misrepresented as being the original software.
 			if (context) return context.text === this.value && context.selectionStart === this.start && context.selectionEnd === this.end;
 			if (editor instanceof HTMLInputElement || editor instanceof HTMLTextAreaElement) return !editor.disabled && !editor.readOnly && editor.value === this.value && editor.selectionStart === this.start && editor.selectionEnd === this.end;
 			const saved = this.contentSelection;
-			if (!editor.isContentEditable || !saved || editor.innerHTML !== this.value) return false;
+			if (!editor.isContentEditable || !saved) return false;
 			const current = currentRange(editor);
-			return current !== null && current.startContainer === resolveBoundary(editor, saved.start) && current.startOffset === saved.start.offset && current.endContainer === resolveBoundary(editor, saved.end) && current.endOffset === saved.end.offset;
+			if (!current) return false;
+			if (editor.innerHTML === this.value && current.startContainer === resolveBoundary(editor, saved.start) && current.startOffset === saved.start.offset && current.endContainer === resolveBoundary(editor, saved.end) && current.endOffset === saved.end.offset) return true;
+			return this.slackPosition !== null && slackSelectionKey(editor, current) === this.slackPosition;
+		}
+		awaitingSlackSelection() {
+			return this.slackPosition !== null && this.editor.isConnected && !currentRange(this.editor) && componentSnapshot(this.editor) === this.componentState;
 		}
 		restoreFocus() {
 			const editor = this.editor;
@@ -1342,11 +1363,49 @@ ime /IME;Input Method Editor/
 		}
 		return parent ? background : "Canvas";
 	}
+	function richCaret(editor) {
+		const selection = selectionFor(editor);
+		const node = selection?.focusNode;
+		if (!selection || !node || !editor.contains(node)) return null;
+		const offset = selection.focusOffset;
+		const range = editor.ownerDocument.createRange();
+		range.setStart(node, offset);
+		range.collapse(true);
+		const rect = range.getBoundingClientRect();
+		const surface = node instanceof HTMLElement ? node : node.parentElement ?? editor;
+		if (rect.height) return {
+			rect,
+			surface
+		};
+		const next = node.childNodes[offset];
+		let edge = next ?? node.childNodes[offset - 1];
+		while (edge?.hasChildNodes()) edge = next ? edge.firstChild : edge.lastChild;
+		if (edge instanceof Text) {
+			range.setStart(edge, next ? 0 : edge.length);
+			range.collapse(true);
+			const measured = range.getBoundingClientRect();
+			if (measured.height) return {
+				rect: measured,
+				surface: edge.parentElement ?? surface
+			};
+		}
+		const line = edge?.parentElement ?? surface;
+		const style = getComputedStyle(line);
+		const bounds = line.getBoundingClientRect();
+		const left = style.direction === "rtl" ? bounds.right - pixels(style.paddingRight) - pixels(style.borderRightWidth) : bounds.left + pixels(style.paddingLeft) + pixels(style.borderLeftWidth);
+		return {
+			rect: new DOMRect(left, bounds.top + pixels(style.paddingTop) + pixels(style.borderTopWidth), 0, lineHeight(style)),
+			surface: line
+		};
+	}
 	var InlinePreedit = class {
 		element = document.createElement("span");
 		mirror = document.createElement("div");
 		marker = document.createElement("span");
 		frame;
+		slackRoot = null;
+		slackPlaceholder;
+		slackObserver = new MutationObserver(() => this.render(this.editor, this.text));
 		editor = null;
 		text = "";
 		constructor(root) {
@@ -1363,7 +1422,8 @@ ime /IME;Input Method Editor/
 			if (!editor || !text) {
 				if (this.frame !== void 0) cancelAnimationFrame(this.frame);
 				this.frame = void 0;
-				this.element.hidden = true;
+				this.watchSlack(null);
+				this.hide();
 				this.element.textContent = "";
 				return;
 			}
@@ -1400,34 +1460,62 @@ ime /IME;Input Method Editor/
 			mirror.replaceChildren();
 			return new DOMRect(left, top, 0, height);
 		}
+		watchSlack(root) {
+			if (this.slackRoot === root) return;
+			this.slackObserver.disconnect();
+			this.slackRoot = root;
+			if (root) this.slackObserver.observe(root, {
+				childList: true,
+				characterData: true,
+				subtree: true
+			});
+		}
+		hide() {
+			this.element.hidden = true;
+			if (this.slackPlaceholder) this.slackPlaceholder.disabled = true;
+		}
+		hideSlackPlaceholder() {
+			if (!this.slackPlaceholder) {
+				const style = document.createElement("style");
+				style.textContent = `
+        .ql-editor.ql-blank:focus::before { visibility: hidden !important }
+        .c-texty_input:has(.ql-editor.ql-blank:focus) .ql-placeholder { visibility: hidden !important }
+      `;
+				document.documentElement.append(style);
+				this.slackPlaceholder = style;
+			}
+			this.slackPlaceholder.disabled = false;
+		}
 		position() {
 			const editor = this.editor;
 			if (!editor?.isConnected) {
-				this.element.hidden = true;
+				this.watchSlack(null);
+				this.hide();
 				return;
 			}
 			const component = componentFor(editor);
 			const root = component?.root ?? editor;
+			const slack = component?.kind === "slack" && root.matches(".ql-editor");
+			this.watchSlack(slack ? root : null);
 			const cursorSelector = component?.kind === "monaco" ? ".cursors-layer .cursor" : component?.kind === "codemirror5" ? ".CodeMirror-cursor" : component?.kind === "codemirror6" ? ".cm-cursor-primary" : null;
 			const visibleCursor = (cursorSelector ? root.querySelector(cursorSelector) : null)?.getBoundingClientRect();
 			const componentCaret = visibleCursor?.height ? visibleCursor : null;
-			const range = currentRange(editor)?.cloneRange();
-			range?.collapse(false);
-			const node = range?.startContainer;
-			const surface = componentCaret ? root.querySelector(".view-lines, .CodeMirror-code, .cm-content") ?? root : node instanceof HTMLElement ? node : node?.parentElement ?? editor;
-			const style = getComputedStyle(surface);
-			const bounds = root.getBoundingClientRect();
 			const field = editor instanceof HTMLInputElement || editor instanceof HTMLTextAreaElement;
-			let caret = componentCaret ?? (field ? this.fieldCaret(editor, editor.getBoundingClientRect(), style) : range?.getBoundingClientRect());
-			if (!caret?.height) {
-				const rect = surface.getBoundingClientRect();
-				const left = style.direction === "rtl" ? rect.right - pixels(style.paddingRight) - pixels(style.borderRightWidth) : rect.left + pixels(style.paddingLeft) + pixels(style.borderLeftWidth);
-				caret = new DOMRect(left, rect.top + pixels(style.paddingTop) + pixels(style.borderTopWidth), 0, lineHeight(style));
-			}
-			if (!bounds.width || !bounds.height || caret.bottom <= bounds.top || caret.top >= bounds.bottom) {
-				this.element.hidden = true;
+			const rich = !field && !componentCaret ? richCaret(editor) : null;
+			if (!field && !componentCaret && !rich) {
+				this.hide();
 				return;
 			}
+			const surface = componentCaret ? root.querySelector(".view-lines, .CodeMirror-code, .cm-content") ?? root : rich?.surface ?? editor;
+			const style = getComputedStyle(surface);
+			const bounds = root.getBoundingClientRect();
+			const caret = componentCaret ?? (field ? this.fieldCaret(editor, editor.getBoundingClientRect(), style) : rich.rect);
+			if (!bounds.width || !bounds.height || caret.bottom <= bounds.top || caret.top >= bounds.bottom) {
+				this.hide();
+				return;
+			}
+			if (slack) this.hideSlackPlaceholder();
+			else if (this.slackPlaceholder) this.slackPlaceholder.disabled = true;
 			const preview = this.element;
 			copyStyle(preview, style, textStyle);
 			preview.style.color = style.color;
@@ -1751,7 +1839,7 @@ ime /IME;Input Method Editor/
 				}
 				clearPending();
 			}
-			if (bookmark?.valid()) return;
+			if (bookmark?.valid() || !trusted && bookmark?.awaitingSlackSelection()) return;
 			engine.reset();
 			bookmark = null;
 			normalize(target);

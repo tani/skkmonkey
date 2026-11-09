@@ -1,5 +1,5 @@
 import { componentFor } from './component.ts';
-import { currentRange } from './editors/shared/selection.ts';
+import { selectionFor } from './editors/shared/selection.ts';
 
 const textStyle = [
   'font-family',
@@ -44,11 +44,56 @@ function backgroundAt(element: HTMLElement, style: CSSStyleDeclaration): string 
   return parent ? background : 'Canvas';
 }
 
+function richCaret(editor: HTMLElement): { rect: DOMRect; surface: HTMLElement } | null {
+  const selection = selectionFor(editor);
+  const node = selection?.focusNode;
+  if (!selection || !node || !editor.contains(node)) return null;
+  const offset = selection.focusOffset;
+  const range = editor.ownerDocument.createRange();
+  range.setStart(node, offset);
+  range.collapse(true);
+  const rect = range.getBoundingClientRect();
+  const surface = node instanceof HTMLElement ? node : (node.parentElement ?? editor);
+  if (rect.height) return { rect, surface };
+
+  // A caret at an element boundary can have an empty Range rect. In
+  // particular, a Quill composer can place it between paragraph nodes.
+  const next = node.childNodes[offset];
+  const adjacent = next ?? node.childNodes[offset - 1];
+  let edge = adjacent;
+  while (edge?.hasChildNodes()) edge = next ? edge.firstChild! : edge.lastChild!;
+  if (edge instanceof Text) {
+    range.setStart(edge, next ? 0 : edge.length);
+    range.collapse(true);
+    const measured = range.getBoundingClientRect();
+    if (measured.height) return { rect: measured, surface: edge.parentElement ?? surface };
+  }
+  const line = edge?.parentElement ?? surface;
+  const style = getComputedStyle(line);
+  const bounds = line.getBoundingClientRect();
+  const left =
+    style.direction === 'rtl'
+      ? bounds.right - pixels(style.paddingRight) - pixels(style.borderRightWidth)
+      : bounds.left + pixels(style.paddingLeft) + pixels(style.borderLeftWidth);
+  return {
+    rect: new DOMRect(
+      left,
+      bounds.top + pixels(style.paddingTop) + pixels(style.borderTopWidth),
+      0,
+      lineHeight(style),
+    ),
+    surface: line,
+  };
+}
+
 export class InlinePreedit {
   readonly element = document.createElement('span');
   private readonly mirror = document.createElement('div');
   private readonly marker = document.createElement('span');
   private frame: number | undefined;
+  private slackRoot: HTMLElement | null = null;
+  private slackPlaceholder: HTMLStyleElement | undefined;
+  private readonly slackObserver = new MutationObserver(() => this.render(this.editor, this.text));
   private editor: HTMLElement | null = null;
   private text = '';
 
@@ -67,7 +112,8 @@ export class InlinePreedit {
     if (!editor || !text) {
       if (this.frame !== undefined) cancelAnimationFrame(this.frame);
       this.frame = undefined;
-      this.element.hidden = true;
+      this.watchSlack(null);
+      this.hide();
       this.element.textContent = '';
       return;
     }
@@ -117,14 +163,43 @@ export class InlinePreedit {
     return new DOMRect(left, top, 0, height);
   }
 
+  private watchSlack(root: HTMLElement | null): void {
+    if (this.slackRoot === root) return;
+    this.slackObserver.disconnect();
+    this.slackRoot = root;
+    if (root)
+      this.slackObserver.observe(root, { childList: true, characterData: true, subtree: true });
+  }
+
+  private hide(): void {
+    this.element.hidden = true;
+    if (this.slackPlaceholder) this.slackPlaceholder.disabled = true;
+  }
+
+  private hideSlackPlaceholder(): void {
+    if (!this.slackPlaceholder) {
+      const style = document.createElement('style');
+      style.textContent = `
+        .ql-editor.ql-blank:focus::before { visibility: hidden !important }
+        .c-texty_input:has(.ql-editor.ql-blank:focus) .ql-placeholder { visibility: hidden !important }
+      `;
+      document.documentElement.append(style);
+      this.slackPlaceholder = style;
+    }
+    this.slackPlaceholder.disabled = false;
+  }
+
   private position(): void {
     const editor = this.editor;
     if (!editor?.isConnected) {
-      this.element.hidden = true;
+      this.watchSlack(null);
+      this.hide();
       return;
     }
     const component = componentFor(editor);
     const root = component?.root ?? editor;
+    const slack = component?.kind === 'slack' && root.matches('.ql-editor');
+    this.watchSlack(slack ? root : null);
     const cursorSelector =
       component?.kind === 'monaco'
         ? '.cursors-layer .cursor'
@@ -136,44 +211,31 @@ export class InlinePreedit {
     const cursor = cursorSelector ? root.querySelector<HTMLElement>(cursorSelector) : null;
     const visibleCursor = cursor?.getBoundingClientRect();
     const componentCaret = visibleCursor?.height ? visibleCursor : null;
-    const range = currentRange(editor)?.cloneRange();
-    range?.collapse(false);
-    const node = range?.startContainer;
+    const field = editor instanceof HTMLInputElement || editor instanceof HTMLTextAreaElement;
+    const rich = !field && !componentCaret ? richCaret(editor) : null;
+    if (!field && !componentCaret && !rich) {
+      this.hide();
+      return;
+    }
     const surface = componentCaret
       ? (root.querySelector<HTMLElement>('.view-lines, .CodeMirror-code, .cm-content') ?? root)
-      : node instanceof HTMLElement
-        ? node
-        : (node?.parentElement ?? editor);
+      : (rich?.surface ?? editor);
     const style = getComputedStyle(surface);
     const bounds = root.getBoundingClientRect();
-    const field = editor instanceof HTMLInputElement || editor instanceof HTMLTextAreaElement;
-    let caret =
+    const caret =
       componentCaret ??
-      (field
-        ? this.fieldCaret(editor, editor.getBoundingClientRect(), style)
-        : range?.getBoundingClientRect());
-    if (!caret?.height) {
-      const rect = surface.getBoundingClientRect();
-      const left =
-        style.direction === 'rtl'
-          ? rect.right - pixels(style.paddingRight) - pixels(style.borderRightWidth)
-          : rect.left + pixels(style.paddingLeft) + pixels(style.borderLeftWidth);
-      caret = new DOMRect(
-        left,
-        rect.top + pixels(style.paddingTop) + pixels(style.borderTopWidth),
-        0,
-        lineHeight(style),
-      );
-    }
+      (field ? this.fieldCaret(editor, editor.getBoundingClientRect(), style) : rich!.rect);
     if (
       !bounds.width ||
       !bounds.height ||
       caret.bottom <= bounds.top ||
       caret.top >= bounds.bottom
     ) {
-      this.element.hidden = true;
+      this.hide();
       return;
     }
+    if (slack) this.hideSlackPlaceholder();
+    else if (this.slackPlaceholder) this.slackPlaceholder.disabled = true;
     const preview = this.element;
     copyStyle(preview, style, textStyle);
     preview.style.color = style.color;
