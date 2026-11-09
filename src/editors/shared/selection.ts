@@ -1,3 +1,19 @@
+export function selectionFor(editor: HTMLElement): Selection | null {
+  const root = editor.getRootNode() as
+    | Document
+    | (ShadowRoot & { getSelection?: () => Selection | null });
+  return 'getSelection' in root && root.getSelection
+    ? root.getSelection()
+    : editor.ownerDocument.getSelection();
+}
+
+export function currentRange(editor: HTMLElement): Range | null {
+  const selection = selectionFor(editor);
+  if (!selection?.rangeCount) return null;
+  const range = selection.getRangeAt(0);
+  return editor.contains(range.commonAncestorContainer) ? range : null;
+}
+
 export interface TextSelectionBookmark {
   root: HTMLElement;
   start: number;

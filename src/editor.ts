@@ -1,17 +1,48 @@
 import { componentFor, componentSnapshot, nativeContext } from './component.ts';
 import { insertInput } from './editors/native/input.ts';
 import { insertContenteditable } from './editors/native/contenteditable.ts';
-import type { Editor } from './editors/types.ts';
+import { currentRange, selectionFor } from './editors/shared/selection.ts';
+import type { Editor, PendingInsertion } from './editors/types.ts';
 export type { Editor } from './editors/types.ts';
 export { findEditor } from './editors/native/index.ts';
 
-function selectionFor(editor: Editor): Selection | null {
-  const root = editor.getRootNode() as
-    | Document
-    | (ShadowRoot & { getSelection?: () => Selection | null });
-  return 'getSelection' in root && root.getSelection
-    ? root.getSelection()
-    : document.getSelection();
+interface Boundary {
+  path: number[];
+  offset: number;
+  nodeType: number;
+  textOffset: number;
+}
+
+function textOffsetAt(root: HTMLElement, node: Node, offset: number): number {
+  const prefix = root.ownerDocument.createRange();
+  prefix.selectNodeContents(root);
+  prefix.setEnd(node, offset);
+  return prefix.toString().length;
+}
+
+function captureBoundary(root: HTMLElement, node: Node, offset: number): Boundary {
+  const path: number[] = [];
+  const { nodeType } = node;
+  const textOffset = textOffsetAt(root, node, offset);
+  while (node !== root) {
+    const parent = node.parentNode!;
+    path.push(Array.from(parent.childNodes).indexOf(node as ChildNode));
+    node = parent;
+  }
+  return { path: path.reverse(), offset, nodeType, textOffset };
+}
+
+function resolveBoundary(root: HTMLElement, boundary: Boundary): Node | null {
+  let node: Node = root;
+  for (const index of boundary.path) {
+    const child = node.childNodes[index];
+    if (!child) return null;
+    node = child;
+  }
+  // Splitting adjacent text nodes can change offsets without changing innerHTML.
+  const length = node instanceof CharacterData ? node.length : node.childNodes.length;
+  if (node.nodeType !== boundary.nodeType || boundary.offset > length) return null;
+  return textOffsetAt(root, node, boundary.offset) === boundary.textOffset ? node : null;
 }
 
 // A bookmark guards against asynchronous page edits or caret moves. Pending
@@ -20,7 +51,7 @@ export class Bookmark {
   private value: string;
   private start = 0;
   private end = 0;
-  private range: Range | null = null;
+  private contentSelection: { start: Boundary; end: Boundary } | null = null;
   private componentState: string;
   readonly editor: Editor;
   constructor(editor: Editor) {
@@ -36,11 +67,15 @@ export class Bookmark {
       this.start = editor.selectionStart ?? 0;
       this.end = editor.selectionEnd ?? this.start;
     } else {
-      this.value = editor.textContent ?? '';
-      const selection = selectionFor(editor);
-      if (selection?.rangeCount) {
-        const range = selection.getRangeAt(0);
-        if (editor.contains(range.commonAncestorContainer)) this.range = range.cloneRange();
+      // Keep an immutable position. A live Range moves when a host replaces
+      // its DOM nodes, even if the host restores the same logical caret.
+      this.value = editor.innerHTML;
+      const range = currentRange(editor);
+      if (range) {
+        this.contentSelection = {
+          start: captureBoundary(editor, range.startContainer, range.startOffset),
+          end: captureBoundary(editor, range.endContainer, range.endOffset),
+        };
       }
     }
   }
@@ -64,16 +99,15 @@ export class Bookmark {
         editor.selectionEnd === this.end
       );
     }
-    if (!editor.isContentEditable || (editor.textContent ?? '') !== this.value || !this.range)
-      return false;
-    const selection = selectionFor(editor);
-    if (!selection?.rangeCount) return false;
-    const current = selection.getRangeAt(0);
+    const saved = this.contentSelection;
+    if (!editor.isContentEditable || !saved || editor.innerHTML !== this.value) return false;
+    const current = currentRange(editor);
     return (
-      current.startContainer === this.range.startContainer &&
-      current.startOffset === this.range.startOffset &&
-      current.endContainer === this.range.endContainer &&
-      current.endOffset === this.range.endOffset
+      current !== null &&
+      current.startContainer === resolveBoundary(editor, saved.start) &&
+      current.startOffset === saved.start.offset &&
+      current.endContainer === resolveBoundary(editor, saved.end) &&
+      current.endOffset === saved.end.offset
     );
   }
   restoreFocus(): boolean {
@@ -99,21 +133,23 @@ export class Bookmark {
       editor.setSelectionRange(this.start, this.end);
       return true;
     }
-    if (
-      !editor.isContentEditable ||
-      editor.textContent !== this.value ||
-      !this.range?.startContainer.isConnected ||
-      !this.range.endContainer.isConnected
-    )
-      return false;
+    const saved = this.contentSelection;
+    if (!editor.isContentEditable || !saved || editor.innerHTML !== this.value) return false;
     editor.focus();
+    if (editor.innerHTML !== this.value) return false;
+    const start = resolveBoundary(editor, saved.start);
+    const end = resolveBoundary(editor, saved.end);
+    if (!start || !end) return false;
+    const range = editor.ownerDocument.createRange();
+    range.setStart(start, saved.start.offset);
+    range.setEnd(end, saved.end.offset);
     const selection = selectionFor(editor);
     selection?.removeAllRanges();
-    selection?.addRange(this.range.cloneRange());
+    selection?.addRange(range);
     editor.ownerDocument.dispatchEvent(new Event('selectionchange'));
     return true;
   }
-  insert(text: string): boolean {
+  insert(text: string): boolean | PendingInsertion {
     if (!this.valid()) return false;
     if (!text) return true;
     const editor = this.editor;
@@ -135,6 +171,7 @@ export class Bookmark {
     if (!editor.dispatchEvent(before) || !this.valid()) return false;
     if (editor instanceof HTMLInputElement || editor instanceof HTMLTextAreaElement)
       return insertInput(editor, text);
-    return insertContenteditable(editor, text, this.range!, selectionFor(editor));
+    const range = currentRange(editor);
+    return range ? insertContenteditable(editor, text, range, selectionFor(editor)) : false;
   }
 }
