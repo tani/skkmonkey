@@ -85,6 +85,7 @@ async function main(): Promise<void> {
     clearPending();
     bookmark = new Bookmark(edit.editor);
     if (!commit(edit.queued)) render();
+    else ui.renderInline(engine, editor);
   }
   function waitForInsertion(target: Editor, insertion: PendingInsertion): void {
     const observer = new MutationObserver(checkPending);
@@ -521,6 +522,7 @@ async function main(): Promise<void> {
   bookmark = editor ? new Bookmark(editor) : null;
   render();
   if (editor) watchNative(editor);
+  document.addEventListener('selectionchange', () => ui.renderInline(engine, editor));
   window.addEventListener('resize', render);
   document.addEventListener('scroll', render, true);
 }

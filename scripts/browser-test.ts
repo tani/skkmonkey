@@ -123,6 +123,7 @@ try {
       await load();
       console.log(`${name}: loaded`);
       const panel = page.locator('.panel');
+      const inline = page.locator('.inline-preedit');
       await page.locator('#text').focus();
       await panel.waitFor({ state: 'hidden' });
       await page.keyboard.press('Control+j');
@@ -137,12 +138,63 @@ try {
       await typeKeys('q');
       assert.equal(await panel.isVisible(), false);
       await typeKeys('k');
-      // Wait past the direct preedit delay while the consonant remains pending.
-      await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 200)));
+      await inline.waitFor({ state: 'visible' });
+      assert.equal(await inline.textContent(), 'k');
       assert.equal(await panel.isVisible(), false);
       assert.equal(await page.locator('#text').inputValue(), '');
+      const firstLine = await inline.boundingBox();
+      assert.ok(firstLine);
       await typeKeys('a');
+      assert.equal(await inline.isVisible(), false);
       assert.equal(await page.locator('#text').inputValue(), 'か');
+
+      await reset('#text', 'first\nsecond');
+      await page.keyboard.press('End');
+      await typeKeys('k');
+      await inline.waitFor({ state: 'visible' });
+      const secondLine = await inline.boundingBox();
+      const fieldBox = await page.locator('#text').boundingBox();
+      assert.ok(secondLine && fieldBox);
+      assert.ok(secondLine.x > firstLine.x && secondLine.y > firstLine.y);
+      assert.ok(secondLine.y + secondLine.height <= fieldBox.y + fieldBox.height);
+      await page.keyboard.press('Backspace');
+      assert.equal(await inline.isVisible(), false);
+      assert.equal(await page.locator('#text').inputValue(), 'first\nsecond');
+
+      await reset('#input', 'prefix');
+      await page.keyboard.press('End');
+      await typeKeys('k');
+      await inline.waitFor({ state: 'visible' });
+      const inputBox = await page.locator('#input').boundingBox();
+      const inputPreview = await inline.boundingBox();
+      assert.ok(inputBox && inputPreview);
+      assert.ok(inputPreview.x > inputBox.x && inputPreview.x < inputBox.x + inputBox.width);
+      assert.ok(inputPreview.y >= inputBox.y && inputPreview.y < inputBox.y + inputBox.height);
+      await typeKeys('a');
+      assert.equal(await page.locator('#input').inputValue(), 'prefixか');
+      assert.equal(await inline.isVisible(), false);
+
+      await reset('#rich', 'prefix');
+      await page.keyboard.press('End');
+      await typeKeys('k');
+      await inline.waitFor({ state: 'visible' });
+      const richPreview = await inline.boundingBox();
+      const richCaret = await page.evaluate(() => {
+        const rect = document.getSelection()!.getRangeAt(0).getBoundingClientRect();
+        return { x: rect.x, y: rect.y };
+      });
+      assert.ok(richPreview);
+      assert.ok(
+        Math.abs(richPreview.x - richCaret.x) < 1 && Math.abs(richPreview.y - richCaret.y) < 1,
+      );
+      assert.equal(await page.locator('#rich').textContent(), 'prefix');
+      await page.keyboard.press('Escape');
+      assert.equal(await inline.isVisible(), false);
+      // Restore the rich-text fixture used by the later undo/markup checks.
+      await page.evaluate(() => {
+        document.querySelector('#rich')!.innerHTML = '<b>prefix:</b> ';
+      });
+      await reset();
       const burst = await page.evaluate(() => {
         const field = document.querySelector<HTMLTextAreaElement>('#text')!;
         field.value = '';
@@ -179,7 +231,11 @@ try {
         'かなしかっ',
         'かなしかった',
       ]);
-      assert.equal(burst.measurements, 0, 'direct typing should not lay out the preedit panel');
+      assert.equal(
+        burst.measurements,
+        0,
+        'a key burst should not measure inline preedit synchronously',
+      );
       await panel.waitFor({ state: 'hidden' });
       await typeKeys('Kanji');
       assert.equal(await panel.isVisible(), true);

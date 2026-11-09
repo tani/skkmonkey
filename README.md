@@ -66,9 +66,9 @@ pending `n` after a stem can become `ん` before okuri, as in `ShinDa`.
 
 Use `n'` before a vowel or `y`: `kon'nichiha` → `こんにちは`.
 The rule `nn` consumes both letters as `ん`.
-The panel stays hidden during direct hiragana input, including when romaji is
-unfinished. Direct kana enters the editor as soon as a syllable resolves. In
-katakana mode the panel shows unfinished romaji after a 120 ms pause. Conversion
+During direct hiragana input, unfinished romaji such as `k` appears underlined
+at the caret. Typing `a` after `k` inserts `か` and removes the preview. The
+preview stays outside the editor model and the panel stays hidden. In katakana mode the panel shows unfinished romaji after a 120 ms pause. Conversion
 readings and candidates appear immediately in the compact floating panel (at
 most two rows, up to 320 px wide). Switching to another mode briefly shows a
 badge. Candidates scroll horizontally, and full text and annotations are

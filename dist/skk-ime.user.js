@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SKK Browser IME
 // @namespace    cc.tani.skk-userscript
-// @version      0.3.9
+// @version      0.3.10
 // @description  Local SKK Japanese input; TypeScript, skkeleton kana rules, local dictionaries
 // @match        https://*/*
 // @match        http://*/*
@@ -1308,6 +1308,140 @@ misrepresented as being the original software.
 skk /SKK;Simple Kana to Kanji conversion/
 ime /IME;Input Method Editor/
 `;
+	// src/inline-preedit.ts
+	var textStyle = [
+		"font-family",
+		"font-size",
+		"font-style",
+		"font-weight",
+		"font-variant",
+		"font-stretch",
+		"font-feature-settings",
+		"font-kerning",
+		"letter-spacing",
+		"word-spacing",
+		"line-height",
+		"tab-size",
+		"text-transform"
+	];
+	function copyStyle(target, source, properties) {
+		for (const property of properties) target.style.setProperty(property, source.getPropertyValue(property));
+	}
+	function pixels(value) {
+		return parseFloat(value) || 0;
+	}
+	function lineHeight(style) {
+		return pixels(style.lineHeight) || pixels(style.fontSize) * 1.2;
+	}
+	function backgroundAt(element, style) {
+		let parent = element;
+		let background = style.backgroundColor;
+		while (parent && (background === "transparent" || background === "rgba(0, 0, 0, 0)")) {
+			parent = parent.parentElement;
+			if (parent) background = getComputedStyle(parent).backgroundColor;
+		}
+		return parent ? background : "Canvas";
+	}
+	var InlinePreedit = class {
+		element = document.createElement("span");
+		mirror = document.createElement("div");
+		marker = document.createElement("span");
+		frame;
+		editor = null;
+		text = "";
+		constructor(root) {
+			this.element.className = "inline-preedit";
+			this.element.hidden = true;
+			this.element.setAttribute("aria-hidden", "true");
+			this.mirror.className = "inline-preedit-mirror";
+			this.mirror.setAttribute("aria-hidden", "true");
+			root.append(this.element, this.mirror);
+		}
+		render(editor, text = "") {
+			this.editor = editor;
+			this.text = text;
+			if (!editor || !text) {
+				if (this.frame !== void 0) cancelAnimationFrame(this.frame);
+				this.frame = void 0;
+				this.element.hidden = true;
+				this.element.textContent = "";
+				return;
+			}
+			this.frame ??= requestAnimationFrame(() => {
+				this.frame = void 0;
+				this.position();
+			});
+		}
+		fieldCaret(field, bounds, style) {
+			const input = field instanceof HTMLInputElement;
+			const offset = (field.selectionDirection === "backward" ? field.selectionStart : field.selectionEnd) ?? 0;
+			const mirror = this.mirror;
+			copyStyle(mirror, style, [
+				...textStyle,
+				"direction",
+				"text-align",
+				"text-indent",
+				"padding",
+				"border-width"
+			]);
+			mirror.style.width = field.clientWidth + pixels(style.borderLeftWidth) + pixels(style.borderRightWidth) + "px";
+			mirror.style.whiteSpace = input || field.wrap === "off" ? "pre" : "pre-wrap";
+			mirror.style.overflowWrap = input || field.wrap === "off" ? "normal" : "break-word";
+			this.marker.textContent = field.value.slice(offset) || "​";
+			mirror.replaceChildren(field.value.slice(0, offset), this.marker);
+			const point = document.createRange();
+			point.setStart(this.marker.firstChild, 0);
+			point.collapse(true);
+			const caret = point.getBoundingClientRect();
+			const origin = mirror.getBoundingClientRect();
+			const height = lineHeight(style);
+			const top = input ? bounds.top + (bounds.height - height) / 2 : bounds.top + caret.top - origin.top - field.scrollTop;
+			const left = bounds.left + caret.left - origin.left - field.scrollLeft;
+			mirror.replaceChildren();
+			return new DOMRect(left, top, 0, height);
+		}
+		position() {
+			const editor = this.editor;
+			if (!editor?.isConnected) {
+				this.element.hidden = true;
+				return;
+			}
+			const component = componentFor(editor);
+			const root = component?.root ?? editor;
+			const cursorSelector = component?.kind === "monaco" ? ".cursors-layer .cursor" : component?.kind === "codemirror5" ? ".CodeMirror-cursor" : component?.kind === "codemirror6" ? ".cm-cursor-primary" : null;
+			const visibleCursor = (cursorSelector ? root.querySelector(cursorSelector) : null)?.getBoundingClientRect();
+			const componentCaret = visibleCursor?.height ? visibleCursor : null;
+			const range = currentRange(editor)?.cloneRange();
+			range?.collapse(false);
+			const node = range?.startContainer;
+			const surface = componentCaret ? root.querySelector(".view-lines, .CodeMirror-code, .cm-content") ?? root : node instanceof HTMLElement ? node : node?.parentElement ?? editor;
+			const style = getComputedStyle(surface);
+			const bounds = root.getBoundingClientRect();
+			const field = editor instanceof HTMLInputElement || editor instanceof HTMLTextAreaElement;
+			let caret = componentCaret ?? (field ? this.fieldCaret(editor, editor.getBoundingClientRect(), style) : range?.getBoundingClientRect());
+			if (!caret?.height) {
+				const rect = surface.getBoundingClientRect();
+				const left = style.direction === "rtl" ? rect.right - pixels(style.paddingRight) - pixels(style.borderRightWidth) : rect.left + pixels(style.paddingLeft) + pixels(style.borderLeftWidth);
+				caret = new DOMRect(left, rect.top + pixels(style.paddingTop) + pixels(style.borderTopWidth), 0, lineHeight(style));
+			}
+			if (!bounds.width || !bounds.height || caret.bottom <= bounds.top || caret.top >= bounds.bottom) {
+				this.element.hidden = true;
+				return;
+			}
+			const preview = this.element;
+			copyStyle(preview, style, textStyle);
+			preview.style.color = style.color;
+			preview.style.backgroundColor = backgroundAt(surface, style);
+			preview.style.colorScheme = style.colorScheme;
+			preview.style.lineHeight = caret.height + "px";
+			preview.textContent = this.text;
+			preview.hidden = false;
+			const width = preview.offsetWidth;
+			const left = caret.left - (style.direction === "rtl" ? width : 0);
+			preview.style.left = Math.max(bounds.left, Math.min(left, bounds.right - width)) + "px";
+			preview.style.top = Math.max(bounds.top, caret.top) + "px";
+		}
+	};
 	// src/ui.ts
 	var labels = {
 		ascii: "A",
@@ -1321,6 +1455,7 @@ ime /IME;Input Method Editor/
 		root;
 		panel;
 		settings;
+		inlinePreedit;
 		status = "";
 		modeNotice = false;
 		lastMode = "ascii";
@@ -1339,6 +1474,10 @@ ime /IME;Input Method Editor/
       *{box-sizing:border-box}button,input,select{font:inherit}
       button{cursor:pointer;background:#eef3f8;border:1px solid #b6c5d6;border-radius:5px;padding:4px 9px;color:#182331}
       button:hover{background:#dce9f6}button:focus-visible{outline:2px solid #146cbd}
+      .inline-preedit{position:fixed;white-space:pre;pointer-events:none;text-decoration:underline;
+        text-underline-offset:0.15em;background:Canvas}
+      .inline-preedit-mirror{position:fixed;top:0;left:0;visibility:hidden;overflow:hidden;
+        border-style:solid;border-color:transparent;pointer-events:none}
       .panel{position:fixed;max-width:min(320px,calc(100vw - 16px));overflow:hidden;background:#fff;
         border:1px solid #9caec1;box-shadow:0 3px 16px #0002;border-radius:5px;padding:4px 6px;pointer-events:auto}
       .head{display:flex;gap:6px;align-items:center;min-width:0}.head button{flex:none;padding:0 4px;font-size:12px;line-height:20px}
@@ -1354,6 +1493,7 @@ ime /IME;Input Method Editor/
       .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}[hidden]{display:none!important}
     `;
 			this.root.append(style);
+			this.inlinePreedit = new InlinePreedit(this.root);
 			this.panel = document.createElement("div");
 			this.panel.className = "panel";
 			this.panel.hidden = true;
@@ -1386,6 +1526,7 @@ ime /IME;Input Method Editor/
 					this.refresh();
 				}, 800);
 			}
+			this.renderInline(engine, editor);
 			const direct = engine.phase === "direct";
 			const canShow = !!editor && this.settings.hidden && !(direct && engine.mode === "hiragana");
 			const directPending = canShow && direct ? engine.romaji.pending : "";
@@ -1447,9 +1588,14 @@ ime /IME;Input Method Editor/
 			const bottom = rect.bottom + 5;
 			this.panel.style.top = Math.max(8, bottom + height < innerHeight ? bottom : Math.min(rect.top - height - 5, innerHeight - height - 8)) + "px";
 		}
+		renderInline(engine, editor) {
+			const directHiragana = this.settings.hidden && engine.phase === "direct" && engine.mode === "hiragana";
+			this.inlinePreedit.render(editor, directHiragana ? engine.romaji.pending : "");
+		}
 		dialog(title) {
 			this.settings.replaceChildren();
 			this.settings.hidden = false;
+			this.inlinePreedit.render(null);
 			this.panel.hidden = true;
 			const dialog = document.createElement("div");
 			dialog.className = "dialog";
@@ -1563,6 +1709,7 @@ ime /IME;Input Method Editor/
 			clearPending();
 			bookmark = new Bookmark(edit.editor);
 			if (!commit(edit.queued)) render();
+			else ui.renderInline(engine, editor);
 		}
 		function waitForInsertion(target, insertion) {
 			const observer = new MutationObserver(checkPending);
@@ -1930,6 +2077,7 @@ ime /IME;Input Method Editor/
 		bookmark = editor ? new Bookmark(editor) : null;
 		render();
 		if (editor) watchNative(editor);
+		document.addEventListener("selectionchange", () => ui.renderInline(engine, editor));
 		window.addEventListener("resize", render);
 		document.addEventListener("scroll", render, true);
 	}

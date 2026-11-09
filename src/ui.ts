@@ -1,6 +1,7 @@
 import type { Engine } from './engine.ts';
 import type { Editor } from './editor.ts';
 import { componentFor } from './component.ts';
+import { InlinePreedit } from './inline-preedit.ts';
 
 const labels = { ascii: 'A', hiragana: 'あ', katakana: 'ア', fullwidth: 'Ａ' };
 const directPreeditDelay = 120;
@@ -10,6 +11,7 @@ export class UI {
   readonly root: ShadowRoot;
   readonly panel: HTMLDivElement;
   readonly settings: HTMLDivElement;
+  private readonly inlinePreedit: InlinePreedit;
   private status = '';
   private modeNotice = false;
   private lastMode: Engine['mode'] = 'ascii';
@@ -29,6 +31,10 @@ export class UI {
       *{box-sizing:border-box}button,input,select{font:inherit}
       button{cursor:pointer;background:#eef3f8;border:1px solid #b6c5d6;border-radius:5px;padding:4px 9px;color:#182331}
       button:hover{background:#dce9f6}button:focus-visible{outline:2px solid #146cbd}
+      .inline-preedit{position:fixed;white-space:pre;pointer-events:none;text-decoration:underline;
+        text-underline-offset:0.15em;background:Canvas}
+      .inline-preedit-mirror{position:fixed;top:0;left:0;visibility:hidden;overflow:hidden;
+        border-style:solid;border-color:transparent;pointer-events:none}
       .panel{position:fixed;max-width:min(320px,calc(100vw - 16px));overflow:hidden;background:#fff;
         border:1px solid #9caec1;box-shadow:0 3px 16px #0002;border-radius:5px;padding:4px 6px;pointer-events:auto}
       .head{display:flex;gap:6px;align-items:center;min-width:0}.head button{flex:none;padding:0 4px;font-size:12px;line-height:20px}
@@ -44,6 +50,7 @@ export class UI {
       .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}[hidden]{display:none!important}
     `;
     this.root.append(style);
+    this.inlinePreedit = new InlinePreedit(this.root);
     this.panel = document.createElement('div');
     this.panel.className = 'panel';
     this.panel.hidden = true;
@@ -76,6 +83,7 @@ export class UI {
         this.refresh();
       }, 800);
     }
+    this.renderInline(engine, editor);
     const direct = engine.phase === 'direct';
     const canShow = !!editor && this.settings.hidden && !(direct && engine.mode === 'hiragana');
     const directPending = canShow && direct ? engine.romaji.pending : '';
@@ -155,9 +163,15 @@ export class UI {
           : Math.min(rect.top - height - 5, innerHeight - height - 8),
       ) + 'px';
   }
+  renderInline(engine: Engine, editor: Editor | null): void {
+    const directHiragana =
+      this.settings.hidden && engine.phase === 'direct' && engine.mode === 'hiragana';
+    this.inlinePreedit.render(editor, directHiragana ? engine.romaji.pending : '');
+  }
   dialog(title: string): HTMLDivElement {
     this.settings.replaceChildren();
     this.settings.hidden = false;
+    this.inlinePreedit.render(null);
     this.panel.hidden = true;
     const dialog = document.createElement('div');
     dialog.className = 'dialog';
