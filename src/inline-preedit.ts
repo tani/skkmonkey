@@ -108,6 +108,8 @@ export class InlinePreedit {
   private readonly mirror = document.createElement('div');
   private readonly marker = document.createElement('span');
   private frame: number | undefined;
+  private readonly fieldPlaceholderStyle = document.createElement('style');
+  private fieldWithHiddenPlaceholder: HTMLInputElement | HTMLTextAreaElement | null = null;
   private slackRoot: HTMLElement | null = null;
   private slackPlaceholder: HTMLStyleElement | undefined;
   private readonly slackObserver = new MutationObserver(() => this.render(this.editor, this.text));
@@ -123,6 +125,8 @@ export class InlinePreedit {
     if (typeof this.portal.showPopover === 'function') this.portal.popover = 'manual';
     this.element.hidden = true;
     this.element.setAttribute('aria-hidden', 'true');
+    this.fieldPlaceholderStyle.textContent =
+      '[data-skk-inline-preedit]::placeholder { color: transparent !important; text-shadow: none !important }';
     this.mirror.className = 'inline-preedit-mirror';
     this.mirror.setAttribute('aria-hidden', 'true');
     root.append(this.element, this.mirror);
@@ -220,7 +224,21 @@ export class InlinePreedit {
   private hide(): void {
     this.element.hidden = true;
     this.mount(null);
+    this.updateFieldPlaceholder(null);
     if (this.slackPlaceholder) this.slackPlaceholder.disabled = true;
+  }
+
+  private updateFieldPlaceholder(field: HTMLInputElement | HTMLTextAreaElement | null): void {
+    if (this.fieldWithHiddenPlaceholder === field) return;
+    this.fieldWithHiddenPlaceholder?.removeAttribute('data-skk-inline-preedit');
+    this.fieldWithHiddenPlaceholder = field;
+    if (field) {
+      const root = field.getRootNode();
+      (root instanceof ShadowRoot ? root : field.ownerDocument.documentElement).append(
+        this.fieldPlaceholderStyle,
+      );
+      field.setAttribute('data-skk-inline-preedit', '');
+    } else this.fieldPlaceholderStyle.remove();
   }
 
   private hideSlackPlaceholder(): void {
@@ -287,6 +305,7 @@ export class InlinePreedit {
     }
     if (slack) this.hideSlackPlaceholder();
     else if (this.slackPlaceholder) this.slackPlaceholder.disabled = true;
+    this.updateFieldPlaceholder(field && editor.matches(':placeholder-shown') ? editor : null);
     this.mount(topLayerContainer(editor));
     const preview = this.element;
     copyStyle(preview, style, textStyle);

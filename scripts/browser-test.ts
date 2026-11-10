@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { checkGitHubSearch, githubSearchFixture } from '../test/github-search.browser.ts';
 import { checkInlinePreedit } from '../test/inline-preedit.browser.ts';
 import { readFile, mkdir } from 'node:fs/promises';
 import { chromium, firefox, type BrowserType } from 'playwright';
@@ -41,6 +42,7 @@ const html = `<!doctype html><html lang="ja"><meta charset="utf-8"><title>SKK te
 <dialog id="markdown-dialog" style="transform:translateY(10px)">
   <form><textarea id="markdown-body" name="comment[body]" aria-label="Leave a comment"></textarea></form>
 </dialog>
+${githubSearchFixture}
 <script>
 window.events=[];window.submits=0;
 document.querySelector('form').addEventListener('submit',e=>{e.preventDefault();window.submits++});
@@ -114,8 +116,8 @@ try {
           return root;
         };
       }, upstreamResource);
-      async function load(resource = 'data') {
-        await page.goto(url + '?resource=' + resource);
+      async function load(resource = 'data', nativeSearch = false) {
+        await page.goto(url + '?resource=' + resource + (nativeSearch ? '&native-search' : ''));
         await page.addScriptTag({ content: script });
         await page.waitForFunction(() => Object.keys(window.__menus).length === 3);
       }
@@ -278,6 +280,7 @@ try {
       await reset();
 
       await checkInlinePreedit(page);
+      await checkGitHubSearch(page);
       await reset();
       const burst = await page.evaluate(() => {
         const field = document.querySelector<HTMLTextAreaElement>('#text')!;
@@ -720,6 +723,9 @@ try {
         assert.ok(count > 100000, String(count));
         console.log(`${name}: real SKK-JISYO.L EUC-JP resource (${count} entries) passed`);
       }
+      await load('data', true);
+      await checkGitHubSearch(page);
+      console.log(`${name}: GitHub search combobox in ARIA and native dialogs passed`);
       assert.deepEqual(errors, []);
       console.log(
         `${name}: input, candidate/okuri, selection, controlled input, rich-text undo, shadow DOM, excluded fields, cancellation, registration, persistence, dictionary import and text safety passed`,

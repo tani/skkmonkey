@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SKK Browser IME
 // @namespace    cc.tani.skk-userscript
-// @version      0.3.12
+// @version      0.3.13
 // @description  Local SKK Japanese input; TypeScript, skkeleton kana rules, local dictionaries
 // @match        https://*/*
 // @match        http://*/*
@@ -1419,6 +1419,8 @@ ime /IME;Input Method Editor/
 		mirror = document.createElement("div");
 		marker = document.createElement("span");
 		frame;
+		fieldPlaceholderStyle = document.createElement("style");
+		fieldWithHiddenPlaceholder = null;
 		slackRoot = null;
 		slackPlaceholder;
 		slackObserver = new MutationObserver(() => this.render(this.editor, this.text));
@@ -1432,6 +1434,7 @@ ime /IME;Input Method Editor/
 			if (typeof this.portal.showPopover === "function") this.portal.popover = "manual";
 			this.element.hidden = true;
 			this.element.setAttribute("aria-hidden", "true");
+			this.fieldPlaceholderStyle.textContent = "[data-skk-inline-preedit]::placeholder { color: transparent !important; text-shadow: none !important }";
 			this.mirror.className = "inline-preedit-mirror";
 			this.mirror.setAttribute("aria-hidden", "true");
 			root.append(this.element, this.mirror);
@@ -1513,7 +1516,18 @@ ime /IME;Input Method Editor/
 		hide() {
 			this.element.hidden = true;
 			this.mount(null);
+			this.updateFieldPlaceholder(null);
 			if (this.slackPlaceholder) this.slackPlaceholder.disabled = true;
+		}
+		updateFieldPlaceholder(field) {
+			if (this.fieldWithHiddenPlaceholder === field) return;
+			this.fieldWithHiddenPlaceholder?.removeAttribute("data-skk-inline-preedit");
+			this.fieldWithHiddenPlaceholder = field;
+			if (field) {
+				const root = field.getRootNode();
+				(root instanceof ShadowRoot ? root : field.ownerDocument.documentElement).append(this.fieldPlaceholderStyle);
+				field.setAttribute("data-skk-inline-preedit", "");
+			} else this.fieldPlaceholderStyle.remove();
 		}
 		hideSlackPlaceholder() {
 			if (!this.slackPlaceholder) {
@@ -1559,6 +1573,7 @@ ime /IME;Input Method Editor/
 			}
 			if (slack) this.hideSlackPlaceholder();
 			else if (this.slackPlaceholder) this.slackPlaceholder.disabled = true;
+			this.updateFieldPlaceholder(field && editor.matches(":placeholder-shown") ? editor : null);
 			this.mount(topLayerContainer(editor));
 			const preview = this.element;
 			copyStyle(preview, style, textStyle);

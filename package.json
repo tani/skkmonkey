@@ -1,6 +1,6 @@
 {
   "name": "skk-userscript",
-  "version": "0.3.12",
+  "version": "0.3.13",
   "private": true,
   "description": "Local SKK Japanese input for Firefox and Chrome userscript managers",
   "license": "MIT",

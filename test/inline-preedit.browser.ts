@@ -1,6 +1,25 @@
 import assert from 'node:assert/strict';
 import type { Locator, Page } from 'playwright';
 
+export async function assertInlinePreeditPainted(inline: Locator): Promise<void> {
+  assert.equal(
+    await inline.evaluate((node) => {
+      const bounds = node.getBoundingClientRect();
+      node.style.pointerEvents = 'auto';
+      try {
+        const root = node.getRootNode() as ShadowRoot;
+        return (
+          root.elementFromPoint(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2) === node
+        );
+      } finally {
+        node.style.removeProperty('pointer-events');
+      }
+    }),
+    true,
+    'inline preedit must be painted above the active field',
+  );
+}
+
 async function box(locator: Locator) {
   const bounds = await locator.boundingBox();
   assert.ok(bounds);
@@ -21,22 +40,7 @@ export async function checkInlinePreedit(page: Page): Promise<void> {
   await inline.waitFor({ state: 'visible' });
   assert.equal(await inline.textContent(), 'k');
   assert.equal(await textarea.inputValue(), '');
-  assert.equal(
-    await inline.evaluate((node) => {
-      const bounds = node.getBoundingClientRect();
-      node.style.pointerEvents = 'auto';
-      try {
-        const root = node.getRootNode() as ShadowRoot;
-        return (
-          root.elementFromPoint(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2) === node
-        );
-      } finally {
-        node.style.removeProperty('pointer-events');
-      }
-    }),
-    true,
-    'inline preedit must be painted above a modal textarea',
-  );
+  await assertInlinePreeditPainted(inline);
   await page.keyboard.type('a');
   assert.equal(await textarea.inputValue(), 'か');
   await inline.waitFor({ state: 'hidden' });
