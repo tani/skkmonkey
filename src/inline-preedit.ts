@@ -86,8 +86,25 @@ function richCaret(editor: HTMLElement): { rect: DOMRect; surface: HTMLElement }
   };
 }
 
+function topLayerContainer(editor: HTMLElement): HTMLElement | null {
+  const selector =
+    typeof editor.showPopover === 'function' ? 'dialog:modal, :popover-open' : 'dialog:modal';
+  let element: Element | null = editor;
+  while (element) {
+    const container = element.closest<HTMLElement>(selector);
+    if (container) return container;
+    const root = element.getRootNode();
+    element = root instanceof ShadowRoot ? root.host : null;
+  }
+  return null;
+}
+
 export class InlinePreedit {
   readonly element = document.createElement('span');
+  private readonly portal = document.createElement('span');
+  private readonly portalRoot = this.portal.attachShadow({ mode: 'closed' });
+  private readonly sizeObserver = new ResizeObserver(() => this.render(this.editor, this.text));
+  private observedRoot: HTMLElement | null = null;
   private readonly mirror = document.createElement('div');
   private readonly marker = document.createElement('span');
   private frame: number | undefined;
@@ -97,8 +114,13 @@ export class InlinePreedit {
   private editor: HTMLElement | null = null;
   private text = '';
 
-  constructor(root: ShadowRoot) {
+  constructor(private readonly root: ShadowRoot) {
     this.element.className = 'inline-preedit';
+    this.element.style.cssText =
+      'position:fixed;white-space:pre;pointer-events:none;text-decoration:underline;text-underline-offset:0.15em;background:Canvas';
+    this.portal.style.cssText =
+      'all:initial;position:fixed;inset:0;width:auto;height:auto;margin:0;padding:0;border:0;background:transparent;pointer-events:none;z-index:2147483647';
+    if (typeof this.portal.showPopover === 'function') this.portal.popover = 'manual';
     this.element.hidden = true;
     this.element.setAttribute('aria-hidden', 'true');
     this.mirror.className = 'inline-preedit-mirror';
@@ -113,6 +135,7 @@ export class InlinePreedit {
       if (this.frame !== undefined) cancelAnimationFrame(this.frame);
       this.frame = undefined;
       this.watchSlack(null);
+      this.watchSize(null);
       this.hide();
       this.element.textContent = '';
       return;
@@ -171,8 +194,32 @@ export class InlinePreedit {
       this.slackObserver.observe(root, { childList: true, characterData: true, subtree: true });
   }
 
+  private watchSize(root: HTMLElement | null): void {
+    if (this.observedRoot === root) return;
+    this.sizeObserver.disconnect();
+    this.observedRoot = root;
+    if (root) this.sizeObserver.observe(root);
+  }
+
+  private mount(container: HTMLElement | null): void {
+    if (!container) {
+      if (this.element.parentNode === this.portalRoot) {
+        this.root.append(this.element);
+        this.portal.remove();
+      }
+      return;
+    }
+    if (this.portal.parentElement === container) return;
+    // The preview must be a descendant of a modal to escape inertness.
+    // A manual popover also keeps viewport coordinates through transforms.
+    container.append(this.portal);
+    this.portalRoot.append(this.element);
+    if (typeof this.portal.showPopover === 'function') this.portal.showPopover();
+  }
+
   private hide(): void {
     this.element.hidden = true;
+    this.mount(null);
     if (this.slackPlaceholder) this.slackPlaceholder.disabled = true;
   }
 
@@ -193,11 +240,13 @@ export class InlinePreedit {
     const editor = this.editor;
     if (!editor?.isConnected) {
       this.watchSlack(null);
+      this.watchSize(null);
       this.hide();
       return;
     }
     const component = componentFor(editor);
     const root = component?.root ?? editor;
+    this.watchSize(root);
     const slack = component?.kind === 'slack' && root.matches('.ql-editor');
     this.watchSlack(slack ? root : null);
     const cursorSelector =
@@ -228,6 +277,8 @@ export class InlinePreedit {
     if (
       !bounds.width ||
       !bounds.height ||
+      caret.left < bounds.left ||
+      caret.left > bounds.right ||
       caret.bottom <= bounds.top ||
       caret.top >= bounds.bottom
     ) {
@@ -236,6 +287,7 @@ export class InlinePreedit {
     }
     if (slack) this.hideSlackPlaceholder();
     else if (this.slackPlaceholder) this.slackPlaceholder.disabled = true;
+    this.mount(topLayerContainer(editor));
     const preview = this.element;
     copyStyle(preview, style, textStyle);
     preview.style.color = style.color;

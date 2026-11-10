@@ -31,8 +31,6 @@ export class UI {
       *{box-sizing:border-box}button,input,select{font:inherit}
       button{cursor:pointer;background:#eef3f8;border:1px solid #b6c5d6;border-radius:5px;padding:4px 9px;color:#182331}
       button:hover{background:#dce9f6}button:focus-visible{outline:2px solid #146cbd}
-      .inline-preedit{position:fixed;white-space:pre;pointer-events:none;text-decoration:underline;
-        text-underline-offset:0.15em;background:Canvas}
       .inline-preedit-mirror{position:fixed;top:0;left:0;visibility:hidden;overflow:hidden;
         border-style:solid;border-color:transparent;pointer-events:none}
       .panel{position:fixed;max-width:min(320px,calc(100vw - 16px));overflow:hidden;background:#fff;

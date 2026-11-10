@@ -182,7 +182,7 @@ try {
         const attach = Element.prototype.attachShadow;
         Element.prototype.attachShadow = function (options) {
           const root = attach.call(this, { ...options, mode: 'open' });
-          if (options.mode === 'closed') window.skkUI = root;
+          if (options.mode === 'closed') window.skkUI ??= root;
           return root;
         };
       }, ids.includes('slate'));

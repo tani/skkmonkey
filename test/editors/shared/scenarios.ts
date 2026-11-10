@@ -74,6 +74,15 @@ export async function runScenarios(page: Page, name: string, errors: string[]) {
   for (const id of names) {
     console.log(`${name}/${id}: starting`);
     await reset(id);
+    await page.keyboard.type('k');
+    const inline = page.locator('.inline-preedit');
+    await inline.waitFor({ state: 'visible' });
+    assert.equal(await inline.textContent(), 'k');
+    assert.equal(await model(id), '');
+    await page.keyboard.type('a');
+    await expectModel(id, 'か');
+    await inline.waitFor({ state: 'hidden' });
+    await reset(id);
     await page.keyboard.type("kon'nichiha");
     await expectModel(id, 'こんにちは');
     if (id === 'monaco-native') {
@@ -182,15 +191,6 @@ export async function runScenarios(page: Page, name: string, errors: string[]) {
     );
   }
   if (names.includes('slate')) {
-    await reset('slate');
-    await page.keyboard.type('k');
-    const inline = page.locator('.inline-preedit');
-    await inline.waitFor({ state: 'visible' });
-    assert.equal(await inline.textContent(), 'k');
-    assert.equal(await model('slate'), '');
-    await page.keyboard.type('a');
-    await expectModel('slate', 'か');
-    await inline.waitFor({ state: 'hidden' });
     for (const delayed of [false, true]) {
       await reset('slate');
       if (delayed) await page.evaluate(() => window.fixture.slate!.deferNext!());

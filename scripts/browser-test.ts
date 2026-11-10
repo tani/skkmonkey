@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { checkInlinePreedit } from '../test/inline-preedit.browser.ts';
 import { readFile, mkdir } from 'node:fs/promises';
 import { chromium, firefox, type BrowserType } from 'playwright';
 import { createServer } from 'node:http';
@@ -33,6 +34,13 @@ const html = `<!doctype html><html lang="ja"><meta charset="utf-8"><title>SKK te
 <div class="c-texty_input"><div id="slack" class="ql-editor" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Message #test" data-placeholder="Message #test"></div></div>
 <div id="slate" data-slate-editor="true" contenteditable="true" role="textbox" aria-label="Message #test"></div>
 <input id="controlled"><div id="shadowhost"></div><button type="submit">Send</button></form>
+<div style="margin-top:160px">
+  <textarea id="markdown-page" name="comment[body]" class="form-control" aria-label="Leave a comment"
+    style="width:400px;height:114px;font:14px/21px monospace;box-sizing:border-box"></textarea>
+</div>
+<dialog id="markdown-dialog" style="transform:translateY(10px)">
+  <form><textarea id="markdown-body" name="comment[body]" aria-label="Leave a comment"></textarea></form>
+</dialog>
 <script>
 window.events=[];window.submits=0;
 document.querySelector('form').addEventListener('submit',e=>{e.preventDefault();window.submits++});
@@ -102,7 +110,7 @@ try {
         const attach = Element.prototype.attachShadow;
         Element.prototype.attachShadow = function (options) {
           const root = attach.call(this, { ...options, mode: 'open' });
-          if (options.mode === 'closed') window.__skkUI = root;
+          if (options.mode === 'closed') window.__skkUI ??= root;
           return root;
         };
       }, upstreamResource);
@@ -269,6 +277,8 @@ try {
       assert.equal(await slack.locator('p').nth(1).textContent(), 'あ');
       await reset();
 
+      await checkInlinePreedit(page);
+      await reset();
       const burst = await page.evaluate(() => {
         const field = document.querySelector<HTMLTextAreaElement>('#text')!;
         field.value = '';

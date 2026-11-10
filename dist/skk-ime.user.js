@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SKK Browser IME
 // @namespace    cc.tani.skk-userscript
-// @version      0.3.11
+// @version      0.3.12
 // @description  Local SKK Japanese input; TypeScript, skkeleton kana rules, local dictionaries
 // @match        https://*/*
 // @match        http://*/*
@@ -1398,8 +1398,24 @@ ime /IME;Input Method Editor/
 			surface: line
 		};
 	}
+	function topLayerContainer(editor) {
+		const selector = typeof editor.showPopover === "function" ? "dialog:modal, :popover-open" : "dialog:modal";
+		let element = editor;
+		while (element) {
+			const container = element.closest(selector);
+			if (container) return container;
+			const root = element.getRootNode();
+			element = root instanceof ShadowRoot ? root.host : null;
+		}
+		return null;
+	}
 	var InlinePreedit = class {
+		root;
 		element = document.createElement("span");
+		portal = document.createElement("span");
+		portalRoot = this.portal.attachShadow({ mode: "closed" });
+		sizeObserver = new ResizeObserver(() => this.render(this.editor, this.text));
+		observedRoot = null;
 		mirror = document.createElement("div");
 		marker = document.createElement("span");
 		frame;
@@ -1409,7 +1425,11 @@ ime /IME;Input Method Editor/
 		editor = null;
 		text = "";
 		constructor(root) {
+			this.root = root;
 			this.element.className = "inline-preedit";
+			this.element.style.cssText = "position:fixed;white-space:pre;pointer-events:none;text-decoration:underline;text-underline-offset:0.15em;background:Canvas";
+			this.portal.style.cssText = "all:initial;position:fixed;inset:0;width:auto;height:auto;margin:0;padding:0;border:0;background:transparent;pointer-events:none;z-index:2147483647";
+			if (typeof this.portal.showPopover === "function") this.portal.popover = "manual";
 			this.element.hidden = true;
 			this.element.setAttribute("aria-hidden", "true");
 			this.mirror.className = "inline-preedit-mirror";
@@ -1423,6 +1443,7 @@ ime /IME;Input Method Editor/
 				if (this.frame !== void 0) cancelAnimationFrame(this.frame);
 				this.frame = void 0;
 				this.watchSlack(null);
+				this.watchSize(null);
 				this.hide();
 				this.element.textContent = "";
 				return;
@@ -1470,8 +1491,28 @@ ime /IME;Input Method Editor/
 				subtree: true
 			});
 		}
+		watchSize(root) {
+			if (this.observedRoot === root) return;
+			this.sizeObserver.disconnect();
+			this.observedRoot = root;
+			if (root) this.sizeObserver.observe(root);
+		}
+		mount(container) {
+			if (!container) {
+				if (this.element.parentNode === this.portalRoot) {
+					this.root.append(this.element);
+					this.portal.remove();
+				}
+				return;
+			}
+			if (this.portal.parentElement === container) return;
+			container.append(this.portal);
+			this.portalRoot.append(this.element);
+			if (typeof this.portal.showPopover === "function") this.portal.showPopover();
+		}
 		hide() {
 			this.element.hidden = true;
+			this.mount(null);
 			if (this.slackPlaceholder) this.slackPlaceholder.disabled = true;
 		}
 		hideSlackPlaceholder() {
@@ -1490,11 +1531,13 @@ ime /IME;Input Method Editor/
 			const editor = this.editor;
 			if (!editor?.isConnected) {
 				this.watchSlack(null);
+				this.watchSize(null);
 				this.hide();
 				return;
 			}
 			const component = componentFor(editor);
 			const root = component?.root ?? editor;
+			this.watchSize(root);
 			const slack = component?.kind === "slack" && root.matches(".ql-editor");
 			this.watchSlack(slack ? root : null);
 			const cursorSelector = component?.kind === "monaco" ? ".cursors-layer .cursor" : component?.kind === "codemirror5" ? ".CodeMirror-cursor" : component?.kind === "codemirror6" ? ".cm-cursor-primary" : null;
@@ -1510,12 +1553,13 @@ ime /IME;Input Method Editor/
 			const style = getComputedStyle(surface);
 			const bounds = root.getBoundingClientRect();
 			const caret = componentCaret ?? (field ? this.fieldCaret(editor, editor.getBoundingClientRect(), style) : rich.rect);
-			if (!bounds.width || !bounds.height || caret.bottom <= bounds.top || caret.top >= bounds.bottom) {
+			if (!bounds.width || !bounds.height || caret.left < bounds.left || caret.left > bounds.right || caret.bottom <= bounds.top || caret.top >= bounds.bottom) {
 				this.hide();
 				return;
 			}
 			if (slack) this.hideSlackPlaceholder();
 			else if (this.slackPlaceholder) this.slackPlaceholder.disabled = true;
+			this.mount(topLayerContainer(editor));
 			const preview = this.element;
 			copyStyle(preview, style, textStyle);
 			preview.style.color = style.color;
@@ -1562,8 +1606,6 @@ ime /IME;Input Method Editor/
       *{box-sizing:border-box}button,input,select{font:inherit}
       button{cursor:pointer;background:#eef3f8;border:1px solid #b6c5d6;border-radius:5px;padding:4px 9px;color:#182331}
       button:hover{background:#dce9f6}button:focus-visible{outline:2px solid #146cbd}
-      .inline-preedit{position:fixed;white-space:pre;pointer-events:none;text-decoration:underline;
-        text-underline-offset:0.15em;background:Canvas}
       .inline-preedit-mirror{position:fixed;top:0;left:0;visibility:hidden;overflow:hidden;
         border-style:solid;border-color:transparent;pointer-events:none}
       .panel{position:fixed;max-width:min(320px,calc(100vw - 16px));overflow:hidden;background:#fff;
